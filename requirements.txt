@@ -3,3 +3,6 @@ jupyter
 ipython
 pandas
 transformers
+plotly
+wordcloud
+spacy
