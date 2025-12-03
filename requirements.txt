@@ -6,3 +6,6 @@ transformers
 plotly
 wordcloud
 spacy
+torch
+torchvision
+bertopic
