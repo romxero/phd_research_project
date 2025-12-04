@@ -1,4 +1,4 @@
-# PHD Project Name Pending
+# PhD Project Name Pending
 
 ## Info
 
