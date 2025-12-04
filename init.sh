@@ -74,6 +74,10 @@ else
     rm ./uv.tar.gz
 fi
 
+
+# add information for gron
+# https://github.com/tomnomnom/gron/releases/download/v0.7.1/gron-linux-amd64-0.7.1.tgz
+
 popd
 
 
