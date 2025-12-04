@@ -84,7 +84,7 @@ popd
 source ${HOME}/.bashrc
 
 
-bash -l -c "$HOME/my_bin/bin/uv venv"
+bash -l -c "$HOME/my_bin/bin/uv venv --python 3.11"
 
 bash -l -c "source .venv/bin/activate; $HOME/my_bin/bin/uv pip install -r ./requirements.txt"
 
