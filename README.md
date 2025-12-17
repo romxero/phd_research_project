@@ -4,6 +4,8 @@
 
 This is a project looking at the pronatalist community on reddit. 
 
+Downloading data requires git LFS support. 
+
 
 ### Software Requirements
 Currently this all works on either linux or mac osx (more work is needed here).
@@ -26,6 +28,9 @@ gantt
     Task in sec      :2025-01-12  , 12d
     another task      : 24d
 ```
+
+
+
 -RC 
 
 
