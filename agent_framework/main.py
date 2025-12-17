@@ -74,7 +74,7 @@ async def main():
         memory=UnconstrainedMemory() #unconstrained memory for Agent
     )
 
-    response = await agent.run("What is 3 times 27 to the power of 5?").middleware(
+    response = await agent.run("What is the weather of Palo Alto, CA?").middleware(
         GlobalTrajectoryMiddleware(included=[Tool]))  # Only show tool executions
 
     print(response.last_message.text)
