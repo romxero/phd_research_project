@@ -40,7 +40,7 @@ gantt
 
     section Core computational research
     Implementation (codebase, pipelines, tests)          :impl, 2026-06-01, 2027-03-31
-    Main experiments, benchmarks, and validations   :exps, 2026-09-01, 2027-04-30
+    Main experiments, benchmarks, and validations        :exps, 2026-09-01, 2027-04-30
     Ablations, scaling, failure analysis                 :ablate, 2027-01-01, 2027-05-10
     Reproducibility package (configs, seeds, artifacts)  :repro, 2027-02-01, 2027-05-15
 
