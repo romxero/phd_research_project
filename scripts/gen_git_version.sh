@@ -4,10 +4,12 @@
 
 
 MY_HASH=$(openssl rand -hex 4)
-MY_TIMESTAMP=$(date +"%m%d%Y%H%M%S")
+MY_TIMESTAMP=$(date +"%Y%m%d%H%M%S")
 
 # version format: YYYYMMDDHHMMSS_HASH
-MY_VERSION="$MY_TIMESTAMP_$MY_HASH"
+MY_VERSION="${MY_TIMESTAMP}_${MY_HASH}"
+
+export MY_VERSION="${MY_TIMESTAMP}_${MY_HASH}"
 
 echo "Version: $MY_VERSION"
 
@@ -19,9 +21,15 @@ if [ "$confirm" != "y" ]; then
 fi
 
 
-git tag -a $MY_VERSION -m "Version $MY_VERSION"
+echo ${MY_VERSION} > ${PWD}/.version
 
-git push origin $MY_VERSION
 
-echo "Version $MY_VERSION created and pushed to origin"
+#git switch -c version/${MY_VERSION}
+
+
+#git tag -a $MY_VERSION -m "Version $MY_VERSION"
+
+#git push origin $MY_VERSION
+
+#echo "Version $MY_VERSION created and pushed to origin"
 
