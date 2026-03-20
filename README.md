@@ -34,13 +34,13 @@ gantt
     section Proposal
     Problem formulation & milestones                     :prob, 2026-02-01, 2026-06-30
     Preliminary experiments / baselines                  :prelim, 2026-03-01, 2026-08-31
-    Proposal writing                                     :propwrite, 2026-05-01, 2026-11-15
+    Finish Chapter 1,2, and 3                            :propwrite, 2026-05-01, 2026-11-15
     Committee feedback & revisions                       :proprev, 2026-09-01, 2026-12-31
     Proposal defense / qualifying                        :milestone, propdef, 2027-01-15, 0d
 
     section Core computational research
     Implementation (codebase, pipelines, tests)          :impl, 2026-06-01, 2027-03-31
-    Main experiments & benchmarks                        :exps, 2026-09-01, 2027-04-30
+    Main experiments, benchmarks, and validations   :exps, 2026-09-01, 2027-04-30
     Ablations, scaling, failure analysis                 :ablate, 2027-01-01, 2027-05-10
     Reproducibility package (configs, seeds, artifacts)  :repro, 2027-02-01, 2027-05-15
 
