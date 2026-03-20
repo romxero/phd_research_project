@@ -1,6 +1,9 @@
 # PhD Project Name Pending
-
-## Info
+## Date: 2026-03-20
+## Author: Randall White
+## Email: randall.white@gmail.com
+## Version: 1.0.0
+### Info
 
 This is a project looking at the pronatalist community on reddit. 
 
@@ -16,7 +19,7 @@ git lfs support is utilized since the data sets can exceed 50Mb.
 
 
 
-## Time line
+### Time line
 ```mermaid
 gantt
     title Computational PhD dissertation (Dec 2025 → May 2027 defense)
