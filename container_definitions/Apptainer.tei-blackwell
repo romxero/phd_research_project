@@ -1,0 +1,28 @@
+BootStrap: docker
+From: ghcr.io/huggingface/text-embeddings-inference:blackwell-latest
+
+# just an hpc toolkit installation
+%labels
+Maintainer Randall "RC" White
+Version .01
+
+
+%files
+/home/romxero/Documents/code/phd_research_project/toolkit-12/ /opt/hpc_toolkit
+
+%post
+# doing an installation of the hpc toolkiti for analysis 
+
+%environment
+
+# CUDA compat libs in the base image shadow the host driver when using `apptainer --nv`.
+# Prefer host libcuda from /.singularity.d/libs, then container CUDA + hpc_toolkit.
+export LD_LIBRARY_PATH="/usr/local/cuda/lib64:/opt/hpc_toolkit/lib64"
+if [ -d "/.singularity.d/libs" ]; then
+  export LD_LIBRARY_PATH="/.singularity.d/libs:${LD_LIBRARY_PATH}"
+fi
+
+# try to get the locales right here
+export LC_ALL="C"
+
+%runscript

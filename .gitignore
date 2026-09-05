@@ -1,6 +1,19 @@
+# This is to remove a bunch of big binaries or containers within the repo directory.
+
 .DS_Store
 .ipynb_checkpoints/
 .version
 .venv
 lib_links
 *~
+*.sif
+db/surreal-sync
+db/surreal
+*.onnx
+*.safetensors
+toolkit-12/
+cuda*.run
+*.wav
+text-embeddings-inference/
+duplicate_project_dir/
+en_US-lessac-medium.onnx.json
