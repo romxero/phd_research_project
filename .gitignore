@@ -15,3 +15,5 @@ toolkit-12/
 cuda*.run
 *.wav
 text-embeddings-inference/
+duplicate_project_dir/
+
