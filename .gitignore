@@ -4,3 +4,4 @@
 .venv
 lib_links
 *~
+*.sif
