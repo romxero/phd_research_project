@@ -16,4 +16,4 @@ cuda*.run
 *.wav
 text-embeddings-inference/
 duplicate_project_dir/
-
+en_US-lessac-medium.onnx.json
