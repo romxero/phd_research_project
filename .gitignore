@@ -2,3 +2,5 @@
 .ipynb_checkpoints/
 .version
 .venv
+lib_links
+*~
