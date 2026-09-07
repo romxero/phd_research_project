@@ -2,7 +2,10 @@
 
 # Source the environment
 
-source ./env.sh
+source env/env.sh
+
+MY_OPTIONS=$@
+
 
 if [[$@ -eq 0]]
 then 
@@ -13,6 +16,7 @@ fi
 
 
 
+
 # Start SurrealDB
 ./surreal start --log debug --username ${SURREAL_USER} --password ${SURREAL_PASSWORD} --bind ${SURREAL_HOST}:${SURREAL_PORT} \
-    --namespace ${SURREAL_NAMESPACE} --database ${SURREAL_DATABASE} > ./surrealdb_
+    --namespace ${SURREAL_NAMESPACE} --database ${SURREAL_DATABASE} > ${LOG_DIR}/surrealdb_init.log 2>&1 & disown
