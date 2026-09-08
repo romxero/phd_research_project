@@ -7,6 +7,9 @@ MY_ENV_ARRAY=(
   "MODEL=llama"
 )
 
+# Location of the root project directories
+MAIN_ENV_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
+MAIN_SCRIPT_DIR=$(echo $MAIN_ENV_DIR | perl -pe 's/\/env//g')
 
 # Project name
 PROJ_NAME="phd_research_project"

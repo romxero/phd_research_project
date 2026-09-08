@@ -1,7 +1,11 @@
-# PhD Project Name Pending
-## Date: 2026-03-20
-## Author: Randall White
-## Email: randall.white@gmail.com
-## Version: 1.0.0
-### Info
+# PhD Dissertation
+
+## Retrieval Augmented Dual Model Thematic Analysis (RAD-MTA)
+
+## Date: 2026-09-07
+## Author: Randall "RC" White / romxero
+
+
+
+
 

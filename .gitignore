@@ -19,7 +19,5 @@ duplicate_project_dir/
 en_US-lessac-medium.onnx.json
 *.swp
 *.log
-<<<<<<< HEAD
-=======
 *.logs
->>>>>>> b172005 (chore: more envs and refactoring of runtime environment)
+*.zip
