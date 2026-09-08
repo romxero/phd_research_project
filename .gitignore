@@ -1,4 +1,4 @@
-# This is to remove a bunch of big binaries or containers within the repo directory.
+# This `.gitignore` file is used to filter out logs, container definitions, binaries, etc.
 
 .DS_Store
 .ipynb_checkpoints/
@@ -19,5 +19,5 @@ duplicate_project_dir/
 en_US-lessac-medium.onnx.json
 *.swp
 *.log
-container_definitions/toolkit-12.9/
+*.logs
 *.zip

@@ -1,45 +1,31 @@
 #!/bin/bash 
 
-# this is an environment file that helps with selecting the apropriate model and inference engine
+# This is used to set the environment variables for the project
+MY_ENV_ARRAY=(
+  "GIT_PAGER=cat"
+  "INF_ENGINE=vllm"
+  "MODEL=llama"
+)
 
 # Location of the root project directories
 MAIN_ENV_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 MAIN_SCRIPT_DIR=$(echo $MAIN_ENV_DIR | perl -pe 's/\/env//g')
 
+# Project name
+PROJ_NAME="phd_research_project"
 
-ENV_ARRAY=(
+# Application name
+APP_NAME="RAD-MTA"
 
-"GIT_PAGER=cat"
-
-)
+LOG_DIR="../logs"
 
 
-for vars in ${ENV_ARRAY[@]};
-do
-	export "${vars}"
+
+# Every variable in the array is exported into the user environment
+for env_var in "${MY_ENV_ARRAY[@]}"; do
+  
+  export "${env_var}"
 
 done
 
-source ${MAIN_SCRIPT_DIR}/db/env/env.sh
-
-
-PROJ_DIRECTORIES=(
-
-container_definitions
-db
-downloads
-env
-logs
-os_env
-scripts
-.proj_state
-
-)
-
-for proj_dirs in ${PROJ_DIRECTORIES[@]};
-do
-
-	mkdir -p ${proj_dirs} 
-done
-
-
+# end 
