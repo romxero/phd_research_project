@@ -19,3 +19,4 @@ duplicate_project_dir/
 en_US-lessac-medium.onnx.json
 *.swp
 *.log
+container_definitions/toolkit-12.9/

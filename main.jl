@@ -1,15 +1,26 @@
+#!/usr/bin/env julia
+
+# this is done using Julia 1.13
+using Pkg
+Pkg.activate(@__DIR__) # Activates the directory where the script lives
+Pkg.instantiate()      # Installs any missing dependencies
+
 using HTTP
-#using PromptingTools: SystemMessage, UserMessage, OllamaManagedSchema, render, aigenerate
 using JSON3
+using PromptingTools: SystemMessage, UserMessage, OllamaManagedSchema, render, aigenerate
+using Rag
 
 const OLLAMA_URL = "http://localhost:11434/api/generate"
-#const OLLAMA_MODEL = "gemma4:12b-mlx"
+const OLLAMA_MODEL = "gemma4:12b-mlx"
 const OLLAMA_MODEL = "lfm2.5:latest"
 const THINKING_TAG_PATTERN = r"<(?:think|redacted_thinking)>[\s\S]*?</think>"
 
+
+
+
 strip_thinking(content::AbstractString) = strip(replace(content, THINKING_TAG_PATTERN => ""))
 
-greet() = print("Hello World!")
+#greet() = print("Hello World!")
 
 const SENTIMENT_PROMPT = [
     SystemMessage("""
