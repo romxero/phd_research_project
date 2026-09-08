@@ -2,24 +2,16 @@
 
 # this is an environment file that helps with selecting the apropriate model and inference engine
 
-ENV_ARRAY=(
-"GIT_PAGER=cat"
-)
+# Location of the root project directories
+MAIN_ENV_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
+MAIN_SCRIPT_DIR=$(echo $MAIN_ENV_DIR | perl -pe 's/\/env//g')
 
-#_INF_ENGINE="ollama" 
-#_MODEL="llama3.2:latest"
-#_AGENT_MODEL="llama3.2:latest"
-#_RAG_MODEL="llama3.2:latest"
-#_PROMPT_FILE="prompt.txt"
-#_CONTEXT_FILE="context.txt"
-#_OUTPUT_FILE="output.txt"
-#_ERROR_FILE="error.txt"
-#_LOG_FILE="log.txt"
-#_DEBUG_FILE="debug.txt"
-#_TRACE_FILE="trace.txt"
-#_DEBUG_LEVEL="debug"
-#_TRACE_LEVEL="trace"
-#_DEBUG_LEVEL="debug"
+
+ENV_ARRAY=(
+
+"GIT_PAGER=cat"
+
+)
 
 
 for vars in ${ENV_ARRAY[@]};
@@ -28,5 +20,26 @@ do
 
 done
 
+source ${MAIN_SCRIPT_DIR}/db/env/env.sh
 
-#export _INF_ENGINE _MODEL _PROMPT_FILE _CONTEXT_FILE _OUTPUT_FILE _ERROR_FILE _LOG_FILE _DEBUG_FILE _TRACE_FILE _DEBUG_LEVEL _TRACE_LEVEL
+
+PROJ_DIRECTORIES=(
+
+container_definitions
+db
+downloads
+env
+logs
+os_env
+scripts
+.proj_state
+
+)
+
+for proj_dirs in ${PROJ_DIRECTORIES[@]};
+do
+
+	mkdir -p ${proj_dirs} 
+done
+
+
