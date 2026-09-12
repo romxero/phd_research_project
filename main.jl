@@ -27,11 +27,6 @@ import RAGTools: find_closest, HasEmbeddings, chunkdata, chunks, sources, indexi
 
 
 
-function precompile()
-    ollama_prompt("Hello, world!")
-    ollama_sentiment("Hello, world!")
-end
-
 
 
 
