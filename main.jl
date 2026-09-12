@@ -1,19 +1,37 @@
 #!/usr/bin/env julia
 
-# this is done using Julia 1.13
+# Making sure the packages are instantiated within the current directory
 using Pkg
 Pkg.activate(@__DIR__) # Activates the directory where the script lives
 Pkg.instantiate()      # Installs any missing dependencies
 
+# precompile everything for good speed on the explicit platform
+precompile
+
+# dependencies
 using HTTP
 using JSON3
+using PromptingTools
 using PromptingTools: SystemMessage, UserMessage, OllamaManagedSchema, render, aigenerate
-using Rag
+using RAGTools
+using RAGTools: AbstractChunkIndex, AbstractSimilarityFinder, CandidateChunks
+using SurrealdbWS
 
-const OLLAMA_URL = "http://localhost:11434/api/generate"
-const OLLAMA_MODEL = "gemma4:12b-mlx"
-const OLLAMA_MODEL = "lfm2.5:latest"
-const THINKING_TAG_PATTERN = r"<(?:think|redacted_thinking)>[\s\S]*?</think>"
+import RAGTools: find_closest, HasEmbeddings, chunkdata, chunks, sources, indexid
+
+#const OLLAMA_URL = "http://localhost:11434/api/generate"
+#const OLLAMA_MODEL = "gemma4:12b-mlx"
+#const OLLAMA_MODEL = "lfm2.5:latest"
+#const THINKING_TAG_PATTERN = r"<(?:think|redacted_thinking)>[\s\S]*?</think>"
+
+
+
+
+function precompile()
+    ollama_prompt("Hello, world!")
+    ollama_sentiment("Hello, world!")
+end
+
 
 
 
