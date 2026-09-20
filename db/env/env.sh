@@ -17,13 +17,18 @@ SURREAL_PORT="65005"
 
 # DBMS table/namespace/db prefix
 
-DBMS_STRING_PREFIX="phd_research_pronatalism"
+DBMS_STRING_PREFIX="rad-mta"
 
 # SurrealDB namespace
 SURREAL_NAMESPACE="${DBMS_STRING_PREFIX}_namespace"
 
 # SurrealDB database
 SURREAL_DATABASE="${DBMS_STRING_PREFIX}_db"
+
+# Surreal DB file name
+SURREAL_DB_FILE_NAME="${DBMS_STRING_PREFIX}.db"
+
+SURREAL_LOG_FILE_NAME="${DBMS_STRING_PREFIX}.log"
 
 # surreal user
 SURREAL_USER="root"

@@ -25,7 +25,46 @@ import RAGTools: find_closest, HasEmbeddings, chunkdata, chunks, sources, indexi
 #const THINKING_TAG_PATTERN = r"<(?:think|redacted_thinking)>[\s\S]*?</think>"
 
 
+# SurrealDB port
 
+## Eventually place this in from macro expansion
+const SURREALDB_PORT = 65005
+const _TEST_SURREALDB_PORT = 65002
+# default surrealdb host
+const DEFAULT_SURREALDB_HOST = "localhost"
+# test surrealdb host
+const _TEST_SURREALDB_HOST = "localhost"
+
+# Surreal Connection
+surreal_db_client = Surreal("ws://$(DEFAULT_SURREALDB_HOST):$(SURREALDB_PORT)/rpc")
+
+
+
+function radmta_surrealdb_connect(_SURREALDB_HOST::String, _SURREALDB_PORT::Int, _SURREALDB_USER::String, _SURREALDB_PASS::String, _SURREALDB_NAMESPACE::String, _SURREALDB_DATABASE::String)
+    _internalDB = SurrealdbWS.connect(_SURREALDB_HOST, _SURREALDB_PORT)
+    SurrealdbWS.connect(_internalDB, _SURREALDB_USER, _SURREALDB_PASS)
+    SurrealdbWS.use(_internalDB, _SURREALDB_NAMESPACE, _SURREALDB_DATABASE)
+    return _internalDB
+end
+
+
+
+function radmta_surrealdb_disconnect(_internalDB::Surreal)
+    _returnCode = 0
+    try
+        # Try to close the database connection
+        SurrealdbWS.close(_internalDB)
+    catch e
+        # An error occurred while closing the database connection
+        _returnCode = 1
+        println("An error occurred while closing the database connection: ", e)
+    finally
+        # Always runs, whether an error happened or not
+        println("Database connection closed successfully.")
+    end
+
+    return _returnCode
+end
 
 
 
@@ -35,17 +74,17 @@ strip_thinking(content::AbstractString) = strip(replace(content, THINKING_TAG_PA
 
 #greet() = print("Hello World!")
 
-const SENTIMENT_PROMPT = [
-    SystemMessage("""
-        You are an expert, objective data annotation assistant. Your task is to perform one-shot sentiment analysis. Analyze the provided customer text and classify its overall sentiment into exactly one of three categories: Positive, Negative, or Neutral. Respond ONLY with the category name. Do not include any introductory words, explanations, or punctuation.
-        Do not include any other text or formatting in your response. No thinking output. Just the category name.
-        Example:
-        Text: "The battery life is terrible, but the camera is great."
-        Sentiment: Neutral
-        """),
-    UserMessage("""Text: {{text}}
-        Sentiment:""")
-]
+#const SENTIMENT_PROMPT = [
+#    SystemMessage("""
+#        You are an expert, objective data annotation assistant. Your task is to perform one-shot sentiment analysis. Analyze the provided customer text and classify its overall sentiment into exactly one of three categories: Positive, Negative, or Neutral. Respond ONLY with the category name. Do not include any introductory words, explanations, or punctuation.
+#        Do not include any other text or formatting in your response. No thinking output. Just the category name.
+#        Example:
+#        Text: "The battery life is terrible, but the camera is great."
+#        Sentiment: Neutral
+#        """),
+#    UserMessage("""Text: {{text}}
+#        Sentiment:""")
+#]
 
 function ollama_prompt(text::String)
     rendered = render(OllamaManagedSchema(), SENTIMENT_PROMPT; text)
