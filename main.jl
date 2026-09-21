@@ -16,13 +16,8 @@ using PromptingTools: SystemMessage, UserMessage, OllamaManagedSchema, render, a
 using RAGTools
 using RAGTools: AbstractChunkIndex, AbstractSimilarityFinder, CandidateChunks
 using SurrealdbWS
-
+using HorseML
 import RAGTools: find_closest, HasEmbeddings, chunkdata, chunks, sources, indexid
-
-#const OLLAMA_URL = "http://localhost:11434/api/generate"
-#const OLLAMA_MODEL = "gemma4:12b-mlx"
-#const OLLAMA_MODEL = "lfm2.5:latest"
-#const THINKING_TAG_PATTERN = r"<(?:think|redacted_thinking)>[\s\S]*?</think>"
 
 
 # SurrealDB port
@@ -40,15 +35,32 @@ surreal_db_client = Surreal("ws://$(DEFAULT_SURREALDB_HOST):$(SURREALDB_PORT)/rp
 
 
 
-function radmta_surrealdb_connect(_SURREALDB_HOST::String, _SURREALDB_PORT::Int, _SURREALDB_USER::String, _SURREALDB_PASS::String, _SURREALDB_NAMESPACE::String, _SURREALDB_DATABASE::String)
-    _internalDB = SurrealdbWS.connect(_SURREALDB_HOST, _SURREALDB_PORT)
-    SurrealdbWS.connect(_internalDB, _SURREALDB_USER, _SURREALDB_PASS)
-    SurrealdbWS.use(_internalDB, _SURREALDB_NAMESPACE, _SURREALDB_DATABASE)
+function radmta_surrealdb_connect_and_return_db(_SURREALDB_HOST::String, _SURREALDB_PORT::Int, _SURREALDB_USER::String, _SURREALDB_PASS::String, _SURREALDB_NAMESPACE::String, _SURREALDB_DATABASE::String)
+
+
+    _internalDB = SurrealdbWS.Surreal("ws://$(_SURREALDB_HOST):$(_SURREALDB_PORT)/rpc")
+    
+    # connect to the surrealdb database
+    SurrealdbWS.connect(_internalDB)
+
+    # authenticate with the surrealdb database
+    SurrealdbWS.signin(_internalDB, user=_SURREALDB_USER, pass=_SURREALDB_PASS)
+
+    # use the namespace and database
+    SurrealdbWS.use(_internalDB, namespace=_SURREALDB_NAMESPACE, database=_SURREALDB_DATABASE)
+
+    # return the database connection
     return _internalDB
+
 end
 
 
 
+
+
+
+
+# maybe don't do a try and catch statement here.
 function radmta_surrealdb_disconnect(_internalDB::Surreal)
     _returnCode = 0
     try
@@ -68,9 +80,52 @@ end
 
 
 
+# this function queries the surrealdb database and returns the result
+function radmta_surrealdb_query(_internalDB::Surreal, _query::String)
+    _result = SurrealdbWS.query(_internalDB, sql=_query)
+    return _result
+end
 
 
-strip_thinking(content::AbstractString) = strip(replace(content, THINKING_TAG_PATTERN => ""))
+# this function returns the authors of the posts
+function radmta_surrealdb_get_authors(_internalDB::Surreal, _table::String)
+    _result = radmta_surrealdb_query(_internalDB, sql="select id,author from $(_table) limit 10")
+    return _result
+end
+
+
+
+
+function radmta_surrealdb_get_keys(_internalDB::Surreal, _table::String)
+    _result = radmta_surrealdb_query(_internalDB, sql="RETURN object::keys((SELECT * FROM $(_table))[0])")
+    return _result
+end
+
+# main portion of the program
+
+
+# note that these are all test cases at the moment.
+function main()
+    _internalDB = radmta_surrealdb_connect_and_return_db(DEFAULT_SURREALDB_HOST, SURREALDB_PORT, "root", "root", "test_namespace", "test_database")
+    _result = radmta_surrealdb_get_authors(_internalDB, "posts")
+    println(_result)
+    radmta_surrealdb_disconnect(_internalDB)
+end
+
+main()
+
+
+### Below might be junk 
+
+#strip_thinking(content::AbstractString) = strip(replace(content, THINKING_TAG_PATTERN => ""))
+
+
+#const OLLAMA_URL = "http://localhost:11434/api/generate"
+#const OLLAMA_MODEL = "gemma4:12b-mlx"
+#const OLLAMA_MODEL = "lfm2.5:latest"
+#const THINKING_TAG_PATTERN = r"<(?:think|redacted_thinking)>[\s\S]*?</think>"
+
+
 
 #greet() = print("Hello World!")
 
@@ -86,31 +141,31 @@ strip_thinking(content::AbstractString) = strip(replace(content, THINKING_TAG_PA
 #        Sentiment:""")
 #]
 
-function ollama_prompt(text::String)
-    rendered = render(OllamaManagedSchema(), SENTIMENT_PROMPT; text)
-    response = HTTP.post(
-        OLLAMA_URL,
-        body = JSON3.write(Dict(
-            "model" => OLLAMA_MODEL,
-            "system" => rendered.system,
-            "prompt" => rendered.prompt,
-            "think" => false,
-            "options" => Dict("temperature" => 0.0),
-        )),
-    )
-    parsed = JSON3.read(String(response.body))
-    return strip_thinking(get(parsed, :response, ""))
-end
+#function ollama_prompt(text::String)
+#    rendered = render(OllamaManagedSchema(), SENTIMENT_PROMPT; text)
+#    response = HTTP.post(
+#        OLLAMA_URL,
+#        body = JSON3.write(Dict(
+#            "model" => OLLAMA_MODEL,
+#            "system" => rendered.system,
+#            "prompt" => rendered.prompt,
+#            "think" => false,
+#            "options" => Dict("temperature" => 0.0),
+#        )),
+#    )
+#    parsed = JSON3.read(String(response.body))
+#    return strip_thinking(get(parsed, :response, ""))
+#end
 
-function ollama_sentiment(text::String)
-    msg = aigenerate(
-        OllamaManagedSchema(),
-        SENTIMENT_PROMPT;
-        text,
-        model = OLLAMA_MODEL,
-        api_kwargs = (think = false, options = Dict("temperature" => 0.0)),
-    )
-    return strip_thinking(msg.content)
-end
+#function ollama_sentiment(text::String)
+#    msg = aigenerate(
+#        OllamaManagedSchema(),
+#        SENTIMENT_PROMPT;
+#        text,
+#        model = OLLAMA_MODEL,
+#        api_kwargs = (think = false, options = Dict("temperature" => 0.0)),
+#    )
+#    return strip_thinking(msg.content)
+#end
 
 
