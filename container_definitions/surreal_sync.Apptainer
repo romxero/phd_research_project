@@ -1,0 +1,9 @@
+BootStrap: docker
+From: almalinux:8.9
+
+# 
+%labels
+    Maintainer Randall "RC" White
+    Version .02
+
+%post
