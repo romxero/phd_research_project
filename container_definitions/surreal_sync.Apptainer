@@ -1,9 +1,33 @@
 BootStrap: docker
-From: almalinux:8.9
+From: ubuntu:24.04
 
-# 
 %labels
     Maintainer Randall "RC" White
-    Version .02
+    Version .03
 
 %post
+    set -e
+
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update
+    apt-get install -y --no-install-recommends \
+        ca-certificates wget rsync \
+        libsasl2-2 libssl3 zlib1g
+
+    test -e /lib/x86_64-linux-gnu/libsasl2.so.2
+
+    cd /tmp
+    wget -O surreal_sync.tar.gz \
+        https://github.com/surrealdb/surreal-sync/releases/download/v0.7.0/surreal-sync-x86_64-unknown-linux-gnu.tar.gz
+    tar zxf surreal_sync.tar.gz
+    install -m 0755 surreal-sync /usr/local/bin/surreal-sync
+    rm -f surreal_sync.tar.gz
+
+    if ldd /usr/local/bin/surreal-sync | grep -F '=> not found'; then
+        exit 1
+    fi
+
+%environment
+    LC_ALL="C.UTF-8"
+
+%runscript
