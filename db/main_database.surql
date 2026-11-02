@@ -20,8 +20,6 @@
 --   4. Theme construction (code, coded, theme, built_from, reviewed_against, memo).
 --      The qualitative unit is the thread. topic_id is not a theme.
 --
--- Fallback: same field contract as main_database.sql (PostgreSQL).
--- =============================================================================
 
 DEFINE NAMESPACE IF NOT EXISTS radmta;
 DEFINE DATABASE IF NOT EXISTS natalism;
