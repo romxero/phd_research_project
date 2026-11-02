@@ -17,6 +17,7 @@ cuda*.run
 text-embeddings-inference/
 duplicate_project_dir/
 en_US-lessac-medium.onnx.json
+container_definitions/toolkit-12.9
 *.swp
 *.log
 *.logs

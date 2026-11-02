@@ -28,4 +28,9 @@ for env_var in "${MY_ENV_ARRAY[@]}"; do
 
 done
 
+# Aliases 
+
+alias _push="git push origin $(git branch | grep \* | awk '{print $2}' | xargs)"
+
+
 # end 
