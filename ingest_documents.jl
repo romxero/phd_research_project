@@ -269,7 +269,7 @@ function insert_radmta_posts_data(posts_data)
                 "selftext" => json_get(post, "selftext"),
                 "domain" => json_get(post, "domain"),
                 "created_utc" => json_get(post, "created_utc"), # unix time in utc
-                "created" => json_get(post, "created"), # unix time in local time
+                #"created" => json_get(post, "created"), # unix time in local time
                 "score" => json_get(post, "score"),
                 "upvote_ratio" => json_get(post, "upvote_ratio"),
                 "num_comments" => json_get(post, "num_comments"),
@@ -319,7 +319,7 @@ function insert_radmta_comments_data(comments_data)
                 "parent_id" => json_get(comment, "parent_id"),
                 "body" => json_get(comment, "body"),
                 "created_utc" => json_get(comment, "created_utc"), # unix time in utc
-                "created" => json_get(comment, "created"), # unix time in local time
+                #"created" => json_get(comment, "created"), # unix time in local time
                 "score" => json_get(comment, "score"),
                 "analysis_text" => radmta_preprocess_text(String(strip(something(json_get(comment, "body"), "")))),
             )
