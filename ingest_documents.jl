@@ -9,37 +9,198 @@ Pkg.instantiate()      # Installs any missing dependencies
 precompile
 
 # dependencies
-using HTTP
-using JSON3
-using SurrealdbWS
-using TextAnalysis
-using Dates
+using HTTP # http library for making requests to the web
+using JSON3 # json3 library for parsing json data. Deprecated but has quite a few dependencies in our package stack.
+using JSON # json library for parsing json data. More modern and has less dependencies in our package stack.
+using SurrealdbWS # surrealdbws library for interacting with the surrealdb database
+using TextAnalysis # text analysis library for text analysis tasks
+using Dates # dates library for working with dates and times
 
 
-# Study fields written on copy. reddit_id, created_at, analysis_text, and
-# comments.parent are filled by the schema. comments.post is filled from link_id.
-const EXAMPLE_POST = Dict{String,Any}(
-    "name" => "t3_14622a",
-    "title" => "Wikipedia on Natalism",
-    "selftext" => "Whoops, this is the post body.",
-    "created_utc" => 1354485197,
-    "score" => 0,
-    "upvote_ratio" => 1.0,
-    "num_comments" => 1,
-)
 
-const EXAMPLE_COMMENT = Dict{String,Any}(
-    "name" => "t1_c7a76o4",
-    "body" => "Whoops...",
-    "link_id" => "t3_14622a",
-    "parent_id" => "t3_14622a",
-    "created_utc" => 1354487261,
-    "score" => 1,
-)
+# SurrealDB schema for the namespace
+## raw"..." keeps SurrealQL $value from being interpolated by Julia (i.e. $value 
+## could be instruct julia to inject a value in this variable, but surrealdb also uses this syntax for using variables in its operations).
+const NAMESPACE_SCHEMA = raw"""
+DEFINE NAMESPACE IF NOT EXISTS radmta;
+USE NS radmta;
+DEFINE DATABASE IF NOT EXISTS natalism;
+USE NS radmta DB natalism;
+"""
 
-# JSON3 rows use Symbol keys (:created_utc). String keys in get() miss and hit the default.
-json_get(row, key) = get(row, Symbol(key), get(row, key, nothing))
+# SurrealDB schema for the posts table
+const TABLE_POSTS_SCHEMA = raw"""
+USE NS radmta DB natalism;
+DEFINE TABLE OVERWRITE posts SCHEMAFULL
+    COMMENT "Study fields for one submission. Record id is the t3_ fullname.";
 
+DEFINE FIELD OVERWRITE name ON posts TYPE string
+    ASSERT $value.starts_with('t3_')
+    COMMENT "Reddit fullname, e.g. t3_14622a";
+-- string::slice(s, start) reads through the end. A third argument is an end index.
+DEFINE FIELD OVERWRITE reddit_id ON posts TYPE string
+    VALUE $value OR string::slice(name, 3)
+    ASSERT $value = string::slice(name, 3)
+    COMMENT "Short id. Derived from name.";
+DEFINE FIELD OVERWRITE title ON posts TYPE string
+    VALUE $value OR '';
+DEFINE FIELD OVERWRITE selftext ON posts TYPE option<string>;
+DEFINE FIELD OVERWRITE domain ON posts TYPE option<string>;
+DEFINE FIELD OVERWRITE url ON posts TYPE option<string>;
+DEFINE FIELD OVERWRITE created_utc ON posts TYPE into
+    VALUE <int>$value
+    COMMENT "Unix seconds";
+DEFINE FIELD OVERWRITE created ON posts TYPE option<int>
+    VALUE IF $value IS NONE THEN NONE ELSE <int>$value END
+    COMMENT "Unix seconds from the archive created field.";
+DEFINE FIELD OVERWRITE created_at ON posts
+    COMMENT "Unix seconds computed to datetime.";
+    COMPUTED time::from_unix(created_utc);
+DEFINE FIELD OVERWRITE score ON posts TYPE option<int>
+    VALUE IF $value IS NONE THEN NONE ELSE <int>$value END;
+DEFINE FIELD OVERWRITE upvote_ratio ON posts TYPE option<float>
+    VALUE IF $value IS NONE THEN NONE ELSE <float>$value END
+    COMMENT "Archive mixes int and float. Coerced on write.";
+DEFINE FIELD OVERWRITE num_comments ON posts TYPE option<int>
+    VALUE IF $value IS NONE THEN NONE ELSE <int>$value END;
+DEFINE FIELD OVERWRITE ups ON posts TYPE option<int>
+    VALUE IF $value IS NONE THEN NONE ELSE <int>$value END;
+DEFINE FIELD OVERWRITE downs ON posts TYPE option<int>
+    VALUE IF $value IS NONE THEN NONE ELSE <int>$value END;
+DEFINE FIELD OVERWRITE selftext_cleaned ON posts TYPE option<string>
+    COMMENT "Preprocessed selftext. Written by the ingest script.";
+DEFINE FIELD OVERWRITE analysis_text ON posts TYPE option<string>
+    COMMENT "Preprocessed title + selftext. Written by the ingest script.";
+
+DEFINE INDEX OVERWRITE uniq_posts_name ON posts FIELDS name UNIQUE;
+DEFINE INDEX OVERWRITE uniq_posts_reddit_id ON posts FIELDS reddit_id UNIQUE;
+DEFINE INDEX OVERWRITE idx_posts_created ON posts FIELDS created_utc;
+DEFINE INDEX OVERWRITE idx_posts_score ON posts FIELDS score;
+DEFINE INDEX OVERWRITE idx_posts_upvote_ratio ON posts FIELDS upvote_ratio;
+DEFINE INDEX OVERWRITE idx_posts_num_comments ON posts FIELDS num_comments;
+"""
+
+# SurrealDB schema for the comments table
+const TABLE_COMMENTS_SCHEMA = raw"""
+USE NS radmta DB natalism;
+DEFINE TABLE OVERWRITE comments SCHEMAFULL
+    COMMENT "Study fields for one comment. Record id is the t1_ fullname.";
+
+DEFINE FIELD OVERWRITE name ON comments TYPE string
+    ASSERT $value.starts_with('t1_')
+    COMMENT "Reddit fullname, e.g. t1_c7a6yvf";
+DEFINE FIELD OVERWRITE reddit_id ON comments TYPE string
+    VALUE $value OR string::slice(name, 3)
+    ASSERT $value = string::slice(name, 3)
+    COMMENT "Short id. Derived from name.";
+DEFINE FIELD OVERWRITE link_id ON comments TYPE string
+    ASSERT $value.starts_with('t3_')
+    COMMENT "Submission fullname this comment belongs to";
+DEFINE FIELD OVERWRITE parent_id ON comments TYPE string
+    ASSERT $value.starts_with('t1_') OR $value.starts_with('t3_')
+    COMMENT "t3_* = reply to the submission; t1_* = reply to a comment";
+DEFINE FIELD OVERWRITE post ON comments TYPE option<record<posts>>
+    VALUE $value OR type::record("posts", link_id)
+    COMMENT "posts:⟨link_id⟩. May dangle if that submission was not copied.";
+DEFINE FIELD OVERWRITE parent ON comments
+    COMPUTED IF parent_id.starts_with('t1_') THEN
+        type::record("comments", parent_id)
+    ELSE IF parent_id.starts_with('t3_') THEN
+        type::record("posts", parent_id)
+    ELSE
+        NONE
+    END
+    COMMENT "comments:⟨t1_…⟩ or posts:⟨t3_…⟩. Derived from parent_id. Do not write it.";
+DEFINE FIELD OVERWRITE body ON comments TYPE option<string>;
+DEFINE FIELD OVERWRITE created_utc ON comments TYPE int
+    VALUE <int>$value
+    COMMENT "Unix seconds";
+DEFINE FIELD OVERWRITE created ON comments TYPE option<int>
+    VALUE IF $value IS NONE THEN NONE ELSE <int>$value END
+    COMMENT "Unix seconds from the archive created field.";
+DEFINE FIELD OVERWRITE created_at ON comments
+    COMMENT "Unix seconds computed to datetime.";
+    COMPUTED time::from_unix(created_utc);
+DEFINE FIELD OVERWRITE score ON comments TYPE option<int>
+    VALUE IF $value IS NONE THEN NONE ELSE <int>$value END;
+DEFINE FIELD OVERWRITE analysis_text ON comments TYPE option<string>
+    COMMENT "Preprocessed comment body. Written by the ingest script.";
+
+DEFINE INDEX OVERWRITE uniq_comments_name ON comments FIELDS name UNIQUE;
+DEFINE INDEX OVERWRITE uniq_comments_reddit_id ON comments FIELDS reddit_id UNIQUE;
+DEFINE INDEX OVERWRITE idx_comments_link ON comments FIELDS link_id;
+DEFINE INDEX OVERWRITE idx_comments_parent ON comments FIELDS parent_id;
+DEFINE INDEX OVERWRITE idx_comments_post ON comments FIELDS post;
+DEFINE INDEX OVERWRITE idx_comments_created ON comments FIELDS created_utc;
+DEFINE INDEX OVERWRITE idx_comments_score ON comments FIELDS score;
+"""
+
+
+
+
+#const FIX_MISSING_FIELDS_FOR_POSTS = 
+
+# SurrealDB configuration constants
+const SURREALDB_HOST = "localhost"
+const SURREALDB_PORT = 65002
+const SURREALDB_USER = "root"
+const SURREALDB_PASS = "root"
+const SURREALDB_NAMESPACE = "radmta"
+const SURREALDB_DATABASE = "natalism"
+
+
+# A helper function to check for errors in the surrealdb query results and return them as an array of strings
+function surreal_statement_errors(result)
+    errors = String[]
+    result isa AbstractVector || return errors
+    for (i, statement) in enumerate(result)
+        statement isa AbstractDict || continue
+        status = get(statement, "status", get(statement, :status, nothing))
+        status == "ERR" || continue
+        detail = get(statement, "result", get(statement, :result, statement))
+        push!(errors, "statement $i: $detail")
+    end
+    return errors
+end
+
+
+# A function to apply the radmta schema to the surrealdb database, this creates the namespaces, databases, and tables. 
+function apply_radmta_schema()
+    db = SurrealdbWS.Surreal("ws://$(SURREALDB_HOST):$(SURREALDB_PORT)/rpc") # connect to the surrealdb database
+    SurrealdbWS.connect(db) # connect to the database
+    try
+        SurrealdbWS.signin(db, user=SURREALDB_USER, pass=SURREALDB_PASS)
+        
+        # iterate through the schemas and apply them to the database, eache schema constant is a large raw string of SurrealSQL statements
+        for sql in (NAMESPACE_SCHEMA, TABLE_POSTS_SCHEMA, TABLE_COMMENTS_SCHEMA)
+            # apply the schema to the database
+            result = SurrealdbWS.query(db, sql=sql)
+            errors = surreal_statement_errors(result) # check for errors in the schema
+            if !isempty(errors)
+                error("SurrealDB rejected schema:\n" * join(errors, "\n")) # if there are errors, throw an error
+            end
+            SurrealdbWS.use(db, namespace=SURREALDB_NAMESPACE, database=SURREALDB_DATABASE) # switch to the database and namespace
+        end
+        info = SurrealdbWS.query(db, sql="INFO FOR DB;") # get the info for the database
+        return info # return the info for the database as a dictionary
+    finally
+        SurrealdbWS.close(db) # close the database connection
+    end
+end
+
+
+# A helper function to get a value from a JSON row using a Symbol or String key
+function json_get(row, key)
+    if haskey(row, Symbol(key))
+        return row[Symbol(key)]
+    elseif haskey(row, key)  # string key
+        return row[key]
+    else
+        return nothing
+    end
+end
+
+# A helper function to convert unix seconds to a datetime
 function unix_seconds_to_datetime(utc)
     utc === nothing && return nothing
     utc isa Integer && return unix2datetime(utc)
@@ -49,119 +210,208 @@ function unix_seconds_to_datetime(utc)
 end
 
 
-#JSON3.Object{Base.CodeUnits{UInt8, String}, Vector{UInt64}} with 41 entries:
-#  :archived               => true
-#  :author                 => "[deleted]"
-#  :author_flair_css_class => nothing
-#  :author_flair_text      => nothing
-#  :created                => 1403471016
-#  :created_utc            => 1403467416
-#  :distinguished          => nothing
-#  :domain                 => "people.com"
-#  :downs                  => 0
-#  :edited                 => false
-#  :from                   => nothing
-#  :from_id                => nothing
-#  :from_kind              => nothing
-#  :gilded                 => 0
-#  :hide_score             => false
-#  :id                     => "28tcy0"
-#  :is_self                => false
-#  :link_flair_css_class   => nothing
-#  :link_flair_text        => nothing
-#  :media                  => nothing
-#  :media_embed            => {}
-#  :name                   => "t3_28tcy0"
-#  :num_comments           => 8
-#  :over_18                => false
-#  :permalink              => "/r/Natalism/comments/28tcy0/how_others_view_natalism/"
-#  :quarantine             => false
-#  :retrieved_on           => 1441300462
-#  :saved                  => false
-#  :score                  => 2
-#  :secure_media           => nothing
-#  :secure_media_embed     => {}
-#  :selftext               => ""
-#  :spoiler                => false
-#  :stickied               => false
-#  :subreddit              => "Natalism"
-#  :subreddit_id           => "t5_2vp2p"
-#  :thumbnail              => "http://b.thumbs.redditmedia.com/uovk_WpiUuBbqPHs.jpg"
-#  :title                  => "How others view Natalism"
-#  :ups                    => 2
-#  :url                    => "http://www.people.com/article/jill-duggar-married-derick-dillard-19-kids-and-counting"
-#  :upvote_ratio           => 1
+# A helper function to preprocess text for the radmta project
+function radmta_preprocess_text(_text::String)
+        
+    fused_url_pattern = r"\bhttps?www[a-zA-Z0-9]+"s
+    # Strip HTML tags and collapse whitespace. Leave letters, digits, and punctuation.
+    ## Make a copy of the string so we don't modify the original.
+    _internalText = StringDocument(_text)
+
+    # Apply cleaning and normalization steps
+    prepare!(_internalText, strip_html_tags | strip_whitespace)
+
+    post_text = replace(_internalText.text, fused_url_pattern => "")
+    
+    return String(strip(post_text))
+
+end
 
 
-# posts
-## posts: name as the record id, title, selftext, created_utc, score, upvote_ratio, num_comments
+# A helper function to read a jsonl file and return an array of dicts
+function read_jsonl_and_return_array_of_dicts(file_path::String)
+    # create an empty array to store the jsonl data
+    _jsonl_data = []
 
-posts_jsonl_file = joinpath(homedir(), "Downloads", "r_natalism_posts-11-01-26.jsonl")
-posts_jsonl_data = []
-open(posts_jsonl_file, "r") do io
-    for line in eachline(io)
-        if !isempty(strip(line))
-            push!(posts_jsonl_data, JSON3.read(line))
+    # open the file and read the data line by line
+    open(file_path, "r") do io
+        for line in eachline(io)
+            # if the line is not empty, read the data into the array
+            _intermediate_line = strip(line)
+            isempty(_intermediate_line) && continue
+            push!(_jsonl_data, JSON.parse(_intermediate_line)) # push the data into the array
         end
+    end
+    return _jsonl_data # return the array of dicts
+end
+
+
+
+function insert_radmta_posts_data(posts_data)
+
+    # connect to the surrealdb database
+    _db = SurrealdbWS.Surreal("ws://$(SURREALDB_HOST):$(SURREALDB_PORT)/rpc")
+    SurrealdbWS.connect(_db) # connect to the database
+    
+    try
+        # sign in to the database
+        SurrealdbWS.signin(_db, user=SURREALDB_USER, pass=SURREALDB_PASS)
+        # switch to the database and namespace
+        SurrealdbWS.use(_db, namespace=SURREALDB_NAMESPACE, database=SURREALDB_DATABASE)
+        # iterate through the posts data and insert the data into the database
+        
+        for post in posts_data
+            # a temporary dictionary buffer, then use this for inserting the data into the database. 
+            _insert_data = Dict{String, Any}(
+                "name" => json_get(post, "name"),
+                "title" => json_get(post, "title"),
+                "selftext" => json_get(post, "selftext"),
+                "domain" => json_get(post, "domain"),
+                "created_utc" => json_get(post, "created_utc"), # unix time in utc
+                "created" => json_get(post, "created"), # unix time in local time
+                "score" => json_get(post, "score"),
+                "upvote_ratio" => json_get(post, "upvote_ratio"),
+                "num_comments" => json_get(post, "num_comments"),
+                "ups" => json_get(post, "ups"),
+                "downs" => json_get(post, "downs"),
+                "url" => json_get(post, "url"),
+                "selftext_cleaned" => radmta_preprocess_text(String(strip(json_get(post, "selftext")))),
+                "analysis_text" => radmta_preprocess_text(String(strip(json_get(post, "title") * " " * json_get(post, "selftext")))),
+            )
+
+            if _insert_data["name"] !== nothing
+
+                SurrealdbWS.insert(_db, thing="posts:$(_insert_data["name"])", data=_insert_data)
+            else
+                continue
+            end
+
+
+        end
+
+    finally
+        # close the database connection
+        SurrealdbWS.close(_db)
     end
 end
 
-for post in posts_jsonl_data
-    created = json_get(post, "created")
-    created_utc = json_get(post, "created_utc")
-    data = Dict{String, Any}(
-        "name" => json_get(post, "name"),
-        "title" => json_get(post, "title"),
-        "selftext" => json_get(post, "selftext"),
-        "domain" => json_get(post, "domain"),
-        "created_utc" => created_utc,
-        "created" => created,
-        "created_datetime" => unix_seconds_to_datetime(created),
-        "created_utc_datetime" => unix_seconds_to_datetime(created_utc),
-        "score" => json_get(post, "score"),
-        "upvote_ratio" => json_get(post, "upvote_ratio"),
-        "num_comments" => json_get(post, "num_comments"),
-        "ups" => json_get(post, "ups"),
-        "downs" => json_get(post, "downs"),
-        "url" => json_get(post, "url"),
-    )
-    println(data)
+
+
+function insert_radmta_comments_data(comments_data)
+
+    # connect to the surrealdb database
+    _db = SurrealdbWS.Surreal("ws://$(SURREALDB_HOST):$(SURREALDB_PORT)/rpc")
+    SurrealdbWS.connect(_db) # connect to the database
+    
+    try
+        # sign in to the database
+        SurrealdbWS.signin(_db, user=SURREALDB_USER, pass=SURREALDB_PASS)
+        # switch to the database and namespace
+        SurrealdbWS.use(_db, namespace=SURREALDB_NAMESPACE, database=SURREALDB_DATABASE)
+        # iterate through the comments data and insert the data into the database
+        
+        for comment in comments_data
+            # a temporary dictionary buffer, then use this for inserting the data into the database. 
+            _insert_data = Dict{String, Any}(
+                "name" => json_get(comment, "name"),
+                "link_id" => json_get(comment, "link_id"),
+                "parent_id" => json_get(comment, "parent_id"),
+                "body" => json_get(comment, "body"),
+                "created_utc" => json_get(comment, "created_utc"), # unix time in utc
+                "created" => json_get(comment, "created"), # unix time in local time
+                "score" => json_get(comment, "score"),
+                "analysis_text" => radmta_preprocess_text(String(strip(something(json_get(comment, "body"), "")))),
+            )
+
+            if _insert_data["name"] !== nothing
+
+                SurrealdbWS.insert(_db, thing="comments:$(_insert_data["name"])", data=_insert_data)
+            else
+                continue
+            end
+
+
+        end
+
+    finally
+        # close the database connection
+        SurrealdbWS.close(_db)
+    end
 end
+
+###############################################################################################
+###################################### MAIN ###################################################
+###############################################################################################
+
+function main()
+
+    # Assemble file path fo the posts jsonl archive
+    posts_jsonl_file = joinpath(homedir(), "Downloads", "r_natalism_posts-11-01-26.jsonl")
+
+    # Assemble file path for the comments jsonl archive
+    comments_jsonl_file = joinpath(homedir(), "Downloads", "r_natalism_comments-11-01-26.jsonl")
+    
+    # read the posts data from the jsonl file
+    posts_jsonl_data = read_jsonl_and_return_array_of_dicts(posts_jsonl_file)
+
+    # read the comments data from the jsonl file
+    comments_jsonl_data = read_jsonl_and_return_array_of_dicts(comments_jsonl_file)
+
+    # insert the posts data into the database
+    insert_radmta_posts_data(posts_jsonl_data)
+
+    # insert the comments data into the database
+    insert_radmta_comments_data(comments_jsonl_data)
+
+
+end
+
+## comments: name as the record id, link_id, parent_id, body, created_utc, score
+# Iterate through the comments data and create a dictionary for each comment
+#for comment in comments_jsonl_data
+#    created = json_get(comment, "created")
+#    created_utc = json_get(comment, "created_utc")
+#    data = Dict{String, Any}(
+#        "name" => json_get(comment, "name"),
+#        "link_id" => json_get(comment, "link_id"),
+#        "parent_id" => json_get(comment, "parent_id"),
+#        "body" => json_get(comment, "body"),
+#        "created_utc" => created_utc,
+#        "created" => created,
+#        "score" => json_get(comment, "score"),
+#        "analysis_text" => radmta_preprocess_text(String(strip(something(json_get(comment, "body"), "")))),
+#    )
+#    println(data)
+#end
 
 
 # comments
-## comments: name as the record id, link_id, parent_id, body, created_utc, score
-
-comments_jsonl_file = joinpath(homedir(), "Downloads", "r_natalism_comments-11-01-26.jsonl")
-comments_jsonl_data = []
-open(comments_jsonl_file, "r") do io
-    for line in eachline(io)
-        if !isempty(strip(line))
-            push!(comments_jsonl_data, JSON3.read(line))
-        end
-    end
-end
 
 
-
-# Comment Keys
-#[:_meta, :all_awardings, :approved_at_utc, :approved_by, :archived, :associated_award, :author, :author_flair_background_color, :author_flair_css_class, :author_flair_richtext, :author_flair_template_id, :author_flair_text, :author_flair_text_color, :author_flair_type, :author_fullname, :author_is_blocked, :author_patreon_flair, :author_premium, :awarders, :banned_at_utc, :banned_by, :body, :can_gild, :can_mod_post, :collapsed, :collapsed_because_crowd_control, :collapsed_reason, :collapsed_reason_code, :comment_type, :controversiality, :created, :created_utc, :distinguished, :downs, :edited, :gilded, :gildings, :id, :is_submitter, :likes, :link_id, :locked, :mod_note, :mod_reason_by, :mod_reason_title, :mod_reports, :name, :no_follow, :num_reports, :parent_id, :permalink, :removal_reason, :replies, :report_reasons, :retrieved_on, :saved, :score, :score_hidden, :send_replies, :stickied, :subreddit, :subreddit_id, :subreddit_name_prefixed, :subreddit_type, :top_awarded_type, :total_awards_received, :treatment_tags, :unrepliable_reason, :ups, :user_reports]
-
-for comment in comments_jsonl_data
-    created = json_get(comment, "created")
-    created_utc = json_get(comment, "created_utc")
-    data = Dict{String, Any}(
-        "name" => json_get(comment, "name"),
-        "link_id" => json_get(comment, "link_id"),
-        "parent_id" => json_get(comment, "parent_id"),
-        "body" => json_get(comment, "body"),
-        "created_utc" => created_utc,
-        "created" => created,
-        "created_datetime" => unix_seconds_to_datetime(created),
-        "created_utc_datetime" => unix_seconds_to_datetime(created_utc),
-        "score" => json_get(comment, "score"),
-    )
-    # println(data)
-end
-
-
+#const FIELDS_FOR_POSTS = Dict{String, Any}(
+#    "name" => "null",
+#    "title" => "null",
+#    "selftext" => "null",
+#    "domain" => "null",
+#    "created_utc" => "null",
+#    "created" => "null",
+#    "score" => "null",
+#    "upvote_ratio" => "null",
+#    "num_comments" => "null",
+#    "ups" => "null",
+#    "downs" => "null",
+#    "url" => "null",
+#    "selftext_cleaned" => "null",
+#    "analysis_text" => "null"
+#)
+#
+#const FIELDS_FOR_COMMENTS = [
+#    "name",
+#    "link_id",
+#    "parent_id",
+#    "body",
+#    "created_utc",
+#    "created",
+#    "score",
+#    "analysis_text"
+#]

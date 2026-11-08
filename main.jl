@@ -127,12 +127,12 @@ end
 
 function radmta_preprocess_text(_text::String)
         
-    # this will preprocess the text for processing by a transformer model. It will strip html tags, whitespace, and non-letters.
+    # Strip HTML tags and collapse whitespace. Leave letters, digits, and punctuation.
     ## Make a copy of the string so we don't modify the original.
     _internalText = StringDocument(_text)
 
     # Apply cleaning and normalization steps
-    prepare!(_internalText, strip_html_tags | strip_whitespace | strip_non_letters)
+    prepare!(_internalText, strip_html_tags | strip_whitespace)
 
 
     return _internalText.text
