@@ -64,8 +64,8 @@ DEFINE FIELD OVERWRITE created ON posts TYPE option<int>
     VALUE IF $value IS NONE THEN NONE ELSE <int>$value END
     COMMENT "Unix seconds from the archive created field.";
 DEFINE FIELD OVERWRITE created_at ON posts
+    COMPUTED time::from_unix(created_utc)
     COMMENT "Unix seconds computed to datetime.";
-    COMPUTED time::from_unix(created_utc);
 DEFINE FIELD OVERWRITE score ON posts TYPE option<int>
     VALUE IF $value IS NONE THEN NONE ELSE <int>$value END;
 DEFINE FIELD OVERWRITE upvote_ratio ON posts TYPE option<float>
@@ -129,8 +129,8 @@ DEFINE FIELD OVERWRITE created ON comments TYPE option<int>
     VALUE IF $value IS NONE THEN NONE ELSE <int>$value END
     COMMENT "Unix seconds from the archive created field.";
 DEFINE FIELD OVERWRITE created_at ON comments
+    COMPUTED time::from_unix(created_utc)
     COMMENT "Unix seconds computed to datetime.";
-    COMPUTED time::from_unix(created_utc);
 DEFINE FIELD OVERWRITE score ON comments TYPE option<int>
     VALUE IF $value IS NONE THEN NONE ELSE <int>$value END;
 DEFINE FIELD OVERWRITE analysis_text ON comments TYPE option<string>
