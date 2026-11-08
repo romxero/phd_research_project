@@ -366,6 +366,13 @@ function main()
 
 end
 
+
+# Run the main function
+main()
+
+
+
+
 ## comments: name as the record id, link_id, parent_id, body, created_utc, score
 # Iterate through the comments data and create a dictionary for each comment
 #for comment in comments_jsonl_data
