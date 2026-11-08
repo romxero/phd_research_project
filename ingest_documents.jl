@@ -16,6 +16,18 @@ using SurrealdbWS # surrealdbws library for interacting with the surrealdb datab
 using TextAnalysis # text analysis library for text analysis tasks
 using Dates # dates library for working with dates and times
 
+# the main constants to use for the operations of this script to the SurrealDB database.
+
+# SurrealDB configuration constants
+const SURREALDB_HOST = "localhost"
+const SURREALDB_PORT = 65002
+const SURREALDB_USER = "root"
+const SURREALDB_PASS = "root"
+const SURREALDB_NAMESPACE = "radmta"
+const SURREALDB_DATABASE = "natalism"
+
+
+
 
 
 # SurrealDB schema for the namespace
@@ -138,15 +150,6 @@ DEFINE INDEX OVERWRITE idx_comments_score ON comments FIELDS score;
 
 
 
-#const FIX_MISSING_FIELDS_FOR_POSTS = 
-
-# SurrealDB configuration constants
-const SURREALDB_HOST = "localhost"
-const SURREALDB_PORT = 65002
-const SURREALDB_USER = "root"
-const SURREALDB_PASS = "root"
-const SURREALDB_NAMESPACE = "radmta"
-const SURREALDB_DATABASE = "natalism"
 
 
 # A helper function to check for errors in the surrealdb query results and return them as an array of strings
@@ -281,7 +284,7 @@ function insert_radmta_posts_data(posts_data)
 
             if _insert_data["name"] !== nothing
 
-                SurrealdbWS.insert(_db, thing="posts:$(_insert_data["name"])", data=_insert_data)
+                SurrealdbWS.createn(_db, thing="posts:$(_insert_data["name"])", data=_insert_data)
             else
                 continue
             end
@@ -325,7 +328,7 @@ function insert_radmta_comments_data(comments_data)
 
             if _insert_data["name"] !== nothing
 
-                SurrealdbWS.insert(_db, thing="comments:$(_insert_data["name"])", data=_insert_data)
+                SurrealdbWS.create(_db, thing="comments:$(_insert_data["name"])", data=_insert_data)
             else
                 continue
             end
