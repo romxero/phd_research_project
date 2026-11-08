@@ -15,7 +15,7 @@ using JSON # json library for parsing json data. More modern and has less depend
 using SurrealdbWS # surrealdbws library for interacting with the surrealdb database
 using TextAnalysis # text analysis library for text analysis tasks
 using Dates # dates library for working with dates and times
-using Distrubuted # distributed library for distributed computing/multiprocessing 
+using Distributed # distributed library for distributed computing/multiprocessing 
 
 # the main constants to use for the operations of this script to the SurrealDB database.
 
@@ -57,7 +57,7 @@ DEFINE FIELD OVERWRITE title ON posts TYPE string
 DEFINE FIELD OVERWRITE selftext ON posts TYPE option<string>;
 DEFINE FIELD OVERWRITE domain ON posts TYPE option<string>;
 DEFINE FIELD OVERWRITE url ON posts TYPE option<string>;
-DEFINE FIELD OVERWRITE created_utc ON posts TYPE into
+DEFINE FIELD OVERWRITE created_utc ON posts TYPE int
     VALUE <int>$value
     COMMENT "Unix seconds";
 DEFINE FIELD OVERWRITE created ON posts TYPE option<int>
