@@ -6,7 +6,8 @@
 -- src_posts and src_comments (the filename is the table name). Copy the
 -- study fields, check the counts, then REMOVE TABLE src_posts, src_comments.
 --
--- Derived, do not write: reddit_id, created_at, analysis_text, comments.parent.
+-- Derived, do not write: reddit_id, created_at, comments.parent.
+-- Written by the ingest script: analysis_text, posts.selftext_cleaned.
 -- comments.post is filled from link_id.
 -- =============================================================================
 
@@ -28,18 +29,35 @@ DEFINE FIELD OVERWRITE reddit_id ON posts TYPE string
 DEFINE FIELD OVERWRITE title ON posts TYPE string
     VALUE $value OR '';
 DEFINE FIELD OVERWRITE selftext ON posts TYPE option<string>;
+DEFINE FIELD OVERWRITE domain ON posts TYPE option<string>;
+DEFINE FIELD OVERWRITE url ON posts TYPE option<string>;
 DEFINE FIELD OVERWRITE created_utc ON posts TYPE int
+    VALUE <int>$value
     COMMENT "Unix seconds";
+DEFINE FIELD OVERWRITE created ON posts TYPE option<int>
+    VALUE IF $value IS NONE THEN NONE ELSE <int>$value END
+    COMMENT "Unix seconds from the archive created field.";
+DEFINE FIELD OVERWRITE created_datetime ON posts TYPE option<datetime>
+    VALUE IF $value IS NONE THEN NONE ELSE <datetime>$value END;
+DEFINE FIELD OVERWRITE created_utc_datetime ON posts TYPE option<datetime>
+    VALUE IF $value IS NONE THEN NONE ELSE <datetime>$value END;
 DEFINE FIELD OVERWRITE created_at ON posts
     COMPUTED time::from_unix(created_utc);
-DEFINE FIELD OVERWRITE score ON posts TYPE option<int>;
+DEFINE FIELD OVERWRITE score ON posts TYPE option<int>
+    VALUE IF $value IS NONE THEN NONE ELSE <int>$value END;
 DEFINE FIELD OVERWRITE upvote_ratio ON posts TYPE option<float>
     VALUE IF $value IS NONE THEN NONE ELSE <float>$value END
     COMMENT "Archive mixes int and float. Coerced on write.";
-DEFINE FIELD OVERWRITE num_comments ON posts TYPE option<int>;
-DEFINE FIELD OVERWRITE analysis_text ON posts
-    COMPUTED string::trim(title + ' ' + (selftext OR ''))
-    COMMENT "title + selftext. Embed this. Do not write it.";
+DEFINE FIELD OVERWRITE num_comments ON posts TYPE option<int>
+    VALUE IF $value IS NONE THEN NONE ELSE <int>$value END;
+DEFINE FIELD OVERWRITE ups ON posts TYPE option<int>
+    VALUE IF $value IS NONE THEN NONE ELSE <int>$value END;
+DEFINE FIELD OVERWRITE downs ON posts TYPE option<int>
+    VALUE IF $value IS NONE THEN NONE ELSE <int>$value END;
+DEFINE FIELD OVERWRITE selftext_cleaned ON posts TYPE option<string>
+    COMMENT "Preprocessed selftext. Written by the ingest script.";
+DEFINE FIELD OVERWRITE analysis_text ON posts TYPE option<string>
+    COMMENT "Preprocessed title + selftext. Written by the ingest script.";
 
 DEFINE INDEX OVERWRITE uniq_posts_name ON posts FIELDS name UNIQUE;
 DEFINE INDEX OVERWRITE uniq_posts_reddit_id ON posts FIELDS reddit_id UNIQUE;
@@ -78,13 +96,22 @@ DEFINE FIELD OVERWRITE parent ON comments
     END
     COMMENT "comments:⟨t1_…⟩ or posts:⟨t3_…⟩. Derived from parent_id. Do not write it.";
 DEFINE FIELD OVERWRITE body ON comments TYPE option<string>;
-DEFINE FIELD OVERWRITE created_utc ON comments TYPE int;
+DEFINE FIELD OVERWRITE created_utc ON comments TYPE int
+    VALUE <int>$value
+    COMMENT "Unix seconds";
+DEFINE FIELD OVERWRITE created ON comments TYPE option<int>
+    VALUE IF $value IS NONE THEN NONE ELSE <int>$value END
+    COMMENT "Unix seconds from the archive created field.";
+DEFINE FIELD OVERWRITE created_datetime ON comments TYPE option<datetime>
+    VALUE IF $value IS NONE THEN NONE ELSE <datetime>$value END;
+DEFINE FIELD OVERWRITE created_utc_datetime ON comments TYPE option<datetime>
+    VALUE IF $value IS NONE THEN NONE ELSE <datetime>$value END;
 DEFINE FIELD OVERWRITE created_at ON comments
     COMPUTED time::from_unix(created_utc);
-DEFINE FIELD OVERWRITE score ON comments TYPE option<int>;
-DEFINE FIELD OVERWRITE analysis_text ON comments
-    COMPUTED body
-    COMMENT "Comment body. Embed this. Do not write it.";
+DEFINE FIELD OVERWRITE score ON comments TYPE option<int>
+    VALUE IF $value IS NONE THEN NONE ELSE <int>$value END;
+DEFINE FIELD OVERWRITE analysis_text ON comments TYPE option<string>
+    COMMENT "Preprocessed comment body. Written by the ingest script.";
 
 DEFINE INDEX OVERWRITE uniq_comments_name ON comments FIELDS name UNIQUE;
 DEFINE INDEX OVERWRITE uniq_comments_reddit_id ON comments FIELDS reddit_id UNIQUE;
