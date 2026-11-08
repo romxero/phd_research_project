@@ -15,6 +15,7 @@ using JSON # json library for parsing json data. More modern and has less depend
 using SurrealdbWS # surrealdbws library for interacting with the surrealdb database
 using TextAnalysis # text analysis library for text analysis tasks
 using Dates # dates library for working with dates and times
+using Distrubuted # distributed library for distributed computing/multiprocessing 
 
 # the main constants to use for the operations of this script to the SurrealDB database.
 
@@ -25,9 +26,6 @@ const SURREALDB_USER = "root"
 const SURREALDB_PASS = "root"
 const SURREALDB_NAMESPACE = "radmta"
 const SURREALDB_DATABASE = "natalism"
-
-
-
 
 
 # SurrealDB schema for the namespace
@@ -284,7 +282,7 @@ function insert_radmta_posts_data(posts_data)
 
             if _insert_data["name"] !== nothing
 
-                SurrealdbWS.createn(_db, thing="posts:$(_insert_data["name"])", data=_insert_data)
+                SurrealdbWS.create(_db, thing="posts:$(_insert_data["name"])", data=_insert_data)
             else
                 continue
             end
@@ -348,6 +346,9 @@ end
 
 function main()
 
+    # Create the radmta: namespace, database, and tables from the initial schema. 
+    apply_radmta_schema()
+
     # Assemble file path fo the posts jsonl archive
     posts_jsonl_file = joinpath(homedir(), "Downloads", "r_natalism_posts-11-01-26.jsonl")
 
@@ -367,6 +368,12 @@ function main()
     insert_radmta_comments_data(comments_jsonl_data)
 
 
+    # free up memory for processing by the garbage collector. 
+    posts_jsonl_data = nothing   # or let main end
+    comments_jsonl_data = nothing   # or let main end
+    GC.gc()
+
+    # end of the main function here. 
 end
 
 
