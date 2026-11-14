@@ -22,6 +22,14 @@ chmod +x ./cuda_toolkit-12.9.run
 ./cuda_toolkit-12.9.run --toolkit --toolkit=${CUDA_TOOLKIT_DIR} \
 	--installpath=${CUDA_TOOLKIT_DIR} --no-man-page --silent
 
+
+MY_TMP_CACHE_DIR="${PWD}/._apptainer_tmp_cache"
+mkdir -p ${MY_TMP_CACHE_DIR}/cache ${MY_TMP_CACHE_DIR}/tmp
+export APPTAINER_TMPDIR=${MY_TMP_CACHE_DIR}/tmp
+export APPTAINER_CACHEDIR=${MY_TMP_CACHE_DIR}/cache
+
 set +x
+
+
 
 exit 0

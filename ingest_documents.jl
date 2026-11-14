@@ -80,7 +80,9 @@ DEFINE FIELD OVERWRITE downs ON posts TYPE option<int>
 DEFINE FIELD OVERWRITE selftext_cleaned ON posts TYPE option<string>
     COMMENT "Preprocessed selftext. Written by the ingest script.";
 DEFINE FIELD OVERWRITE analysis_text ON posts TYPE option<string>
+    VALUE IF $value IS NONE THEN NONE ELSE <string>$value END
     COMMENT "Preprocessed title + selftext. Written by the ingest script.";
+
 
 DEFINE INDEX OVERWRITE uniq_posts_name ON posts FIELDS name UNIQUE;
 DEFINE INDEX OVERWRITE uniq_posts_reddit_id ON posts FIELDS reddit_id UNIQUE;
@@ -134,7 +136,8 @@ DEFINE FIELD OVERWRITE created_at ON comments
 DEFINE FIELD OVERWRITE score ON comments TYPE option<int>
     VALUE IF $value IS NONE THEN NONE ELSE <int>$value END;
 DEFINE FIELD OVERWRITE analysis_text ON comments TYPE option<string>
-    COMMENT "Preprocessed comment body. Written by the ingest script.";
+    VALUE IF $value IS NONE THEN NONE ELSE <string>$value END
+    COMMENT "Preprocessed body. Written by the ingest script. Derived from the body field.";
 
 DEFINE INDEX OVERWRITE uniq_comments_name ON comments FIELDS name UNIQUE;
 DEFINE INDEX OVERWRITE uniq_comments_reddit_id ON comments FIELDS reddit_id UNIQUE;
@@ -146,7 +149,10 @@ DEFINE INDEX OVERWRITE idx_comments_score ON comments FIELDS score;
 """
 
 
-
+function put_some!(d, k, v)
+    v === nothing || (d[k] = v)
+    return d
+end
 
 
 
@@ -282,6 +288,11 @@ function insert_radmta_posts_data(posts_data)
 
             if _insert_data["name"] !== nothing
 
+                # drop keys that would become JSON null
+                for k in collect(keys(_insert_data))
+                    _insert_data[k] === nothing && delete!(_insert_data, k)
+                end
+                # create the record in the database
                 SurrealdbWS.create(_db, thing="posts:$(_insert_data["name"])", data=_insert_data)
             else
                 continue
@@ -321,11 +332,16 @@ function insert_radmta_comments_data(comments_data)
                 "created_utc" => json_get(comment, "created_utc"), # unix time in utc
                 #"created" => json_get(comment, "created"), # unix time in local time
                 "score" => json_get(comment, "score"),
-                "analysis_text" => radmta_preprocess_text(String(strip(something(json_get(comment, "body"), "")))),
+                "analysis_text" => radmta_preprocess_text(String(strip(json_get(comment, "body")))),
             )
 
             if _insert_data["name"] !== nothing
+                # drop keys that would become JSON null
+                for k in collect(keys(_insert_data))
+                    _insert_data[k] === nothing && delete!(_insert_data, k)
+                end
 
+                # create the record in the database
                 SurrealdbWS.create(_db, thing="comments:$(_insert_data["name"])", data=_insert_data)
             else
                 continue
@@ -373,6 +389,8 @@ function main()
     comments_jsonl_data = nothing   # or let main end
     GC.gc()
 
+    # Create the threads tables 
+
     # end of the main function here. 
 end
 
@@ -380,6 +398,22 @@ end
 # Run the main function
 main()
 
+
+
+
+## Modify the creation steap for surrealdb 
+
+
+#surql(v::AbstractString) = "s" * JSON.json(v)
+#surql(::Nothing) = "NONE"
+#surql(v::Bool) = v ? "true" : "false"
+#surql(v::Real) = string(v)
+#
+#surql_object(d) = "{" * join(("$k: $(surql(v))" for (k, v) in d), ", ") * "}"
+#
+#sql = "CREATE posts:⟨$(_insert_data["name"])⟩ CONTENT $(surql_object(_insert_data));"
+#errors = surreal_statement_errors(SurrealdbWS.query(_db, sql=sql))
+#isempty(errors) || error(join(errors, "\n"))
 
 
 
