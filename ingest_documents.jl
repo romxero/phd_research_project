@@ -10,6 +10,10 @@ precompile
 
 # dependencies
 using HTTP # http library for making requests to the web
+# SurrealdbWS keeps one HTTP.jl connection per pool slot until the process exits.
+# On one Julia thread the default cap is 16. Schema (1) plus the two document
+# pools (8 + 8) passes that, and the next connect sits there until the 10s timeout.
+HTTP.set_default_connection_limit!(256)
 using JSON3 # json3 library for parsing json data. Deprecated but has quite a few dependencies in our package stack.
 using JSON # json library for parsing json data. More modern and has less dependencies in our package stack.
 using SurrealdbWS # surrealdbws library for interacting with the surrealdb database
@@ -211,11 +215,67 @@ end
 
 
 function sql_fallback_eligible(e)::Bool
-    msg = sprint(showerror, e)   # or e.msg if ErrorException
+    # create() runs inside @spawn, so this is usually a TaskFailedException
+    # whose text still contains the server message.
+    msg = sprint(showerror, e)
     occursin("Couldn't coerce value for field", msg) || return false
     occursin("Expected", msg) && occursin("string", msg) || return false
-  # optional: occursin(r"but found `?\w+:\w+", msg)
     return true
+end
+
+
+# JSON-RPC create, and query variables, both parse some colon-shaped strings
+# as record ids before SCHEMAFULL runs (surrealdb#7685). A quoted literal in
+# the SQL text stays a string, so the fallback must not bind the row as $data.
+function surrealql_literal(v)::String
+    v isa Bool && return v ? "true" : "false"
+    v isa Integer && return string(v)
+    v isa AbstractFloat && return string(v)
+    v isa AbstractString && return surrealql_string(v)
+    error("cannot inline $(typeof(v)) into SurrealQL")
+end
+
+
+function surrealql_string(s::AbstractString)::String
+    io = IOBuffer()
+    print(io, '\'')
+    for c in s
+        if c == '\\' || c == '\''
+            print(io, '\\', c)
+        elseif c == '\n'
+            print(io, "\\n")
+        elseif c == '\r'
+            print(io, "\\r")
+        elseif c == '\t'
+            print(io, "\\t")
+        elseif c == '\b'
+            print(io, "\\b")
+        elseif c == '\f'
+            print(io, "\\f")
+        elseif isascii(c) && iscntrl(c)
+            print(io, "\\u", string(UInt16(c), base=16, pad=4))
+        else
+            print(io, c)
+        end
+    end
+    print(io, '\'')
+    return String(take!(io))
+end
+
+
+function surrealql_content(data::AbstractDict)::String
+    parts = String[]
+    for (k, v) in data
+        key = String(k)
+        occursin(r"^[A-Za-z_][A-Za-z0-9_]*$", key) || error("refusing to inline field $key")
+        push!(parts, key * ": " * surrealql_literal(v))
+    end
+    return "{" * join(parts, ", ") * "}"
+end
+
+
+function document_create_sql(name_s::AbstractString, data::AbstractDict)::String
+    return "CREATE type::record('documents', " * surrealql_string(name_s) * ") CONTENT " * surrealql_content(data) * ";"
 end
 
 
@@ -501,15 +561,10 @@ function insert_radmta_documents_data(records::Array)::Nothing
                 SurrealdbWS.create(_db, thing="documents:$name_s", data=_insert_data)
             catch e
                 if sql_fallback_eligible(e)
-                    info("SQL fallback eligible for $name_s")
-                    info("Error: $e, trying to create record without SQL fallback.")
-                    result = SurrealdbWS.query(
-                        _db,
-                        sql = raw"CREATE type::record('documents', $rid) CONTENT $data;",
-                        vars = Dict("rid" => name_s, "data" => _insert_data),
-                    )
+                    println("RPC create coerced a string for documents:$name_s; retrying as a SurrealQL query")
+                    result = SurrealdbWS.query(_db, sql=document_create_sql(name_s, _insert_data))
                     errors = surreal_statement_errors(result)
-                    isempty(errors) || error(join(errors, "\n"))
+                    isempty(errors) || error("SQL fallback failed for documents:$name_s:\n" * join(errors, "\n"))
                 else
                     rethrow(e)
                 end
