@@ -23,9 +23,14 @@ using TextAnalysis
 import RAGTools: find_closest, HasEmbeddings, chunkdata, chunks, sources, indexid
 
 
+_insert_data = Dict{String, Any}(
+
+"text" => _text,
+"my" => _my,
+"max_chunks" => _max_chunks,
 
 
-
+) 
 
 const _test_post_text = """
 >... This (Sterility) is not something that can be grasped as a plain matter of Causality (as modern science naturally enough has tried to grasp it); it is to be understood as an essentially metaphysical turn towards death. The last man of the world-city no longer wants to live - he may cling to life as an individual, but as a type, as an aggregate, no, for it is a characteristic of this collective existence that it eliminates the terror of death. That which strikes the true peasant with a deep and inexplicable fear, the notion that the family and the name may be extinguished, has now lost its meaning. The continuance of the blood-relation in the visible world is no longer a duty of the blood, and the destiny of being the last of the line is no longer felt as a doom. Children do not happen, not because children have become impossible, but principally because intelligence at the peak of intensity can no longer find any reason for their existence.

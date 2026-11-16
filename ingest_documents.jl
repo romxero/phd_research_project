@@ -38,6 +38,173 @@ DEFINE DATABASE IF NOT EXISTS natalism;
 USE NS radmta DB natalism;
 """
 
+
+
+const DOCUMENTS_TABLE_SCHEMA = raw"""
+
+DEFINE NAMESPACE IF NOT EXISTS radmta;
+DEFINE DATABASE IF NOT EXISTS natalism;
+USE NS radmta DB natalism;
+
+DEFINE TABLE OVERWRITE documents SCHEMAFULL
+    COMMENT "One post or one comment. Record id is the t3_ or t1_ fullname.";
+
+DEFINE FIELD OVERWRITE kind ON documents TYPE string
+    ASSERT $value IN ['post', 'comment']
+    COMMENT "post = submission. comment = reply.";
+
+DEFINE FIELD OVERWRITE name ON documents TYPE string
+    ASSERT ($value.starts_with('t3_') AND kind = 'post')
+        OR ($value.starts_with('t1_') AND kind = 'comment')
+    COMMENT "Reddit fullname, e.g. t3_14622a or t1_c7a6yvf.";
+
+-- string::slice(name, 3) reads from index 3 through the end. Both prefixes are 3 characters.
+DEFINE FIELD OVERWRITE reddit_id ON documents TYPE string
+    VALUE $value OR string::slice(name, 3)
+    ASSERT $value = string::slice(name, 3)
+    COMMENT "Short id. Derived from name.";
+
+-- ---------------------------------------------------------------------------
+-- Comment linkage. Empty on a post.
+-- ---------------------------------------------------------------------------
+
+DEFINE FIELD OVERWRITE link_id ON documents TYPE option<string>
+    VALUE IF kind = 'post' THEN NONE ELSE $value END
+    ASSERT IF kind = 'comment' THEN
+        $value IS NOT NONE AND $value.starts_with('t3_')
+    ELSE
+        $value IS NONE
+    END
+    COMMENT "Submission fullname this comment belongs to.";
+
+DEFINE FIELD OVERWRITE parent_id ON documents TYPE option<string>
+    VALUE IF kind = 'post' THEN NONE ELSE $value END
+    ASSERT IF kind = 'comment' THEN
+        $value IS NOT NONE AND ($value.starts_with('t1_') OR $value.starts_with('t3_'))
+    ELSE
+        $value IS NONE
+    END
+    COMMENT "t3_* = reply to the submission; t1_* = reply to a comment.";
+
+DEFINE FIELD OVERWRITE thread ON documents TYPE record<documents>
+    VALUE IF kind = 'post' THEN
+        type::record("documents", name)
+    ELSE
+        type::record("documents", link_id)
+    END
+    COMMENT "The submission row. A post points at itself. A comment points at documents:⟨link_id⟩. Derived. Do not write it. May dangle if that submission was not copied.";
+
+DEFINE FIELD OVERWRITE parent ON documents TYPE option<record<documents>>
+    VALUE IF kind = 'comment' AND parent_id IS NOT NONE THEN
+        type::record("documents", parent_id)
+    ELSE
+        NONE
+    END
+    COMMENT "documents:⟨parent_id⟩. Derived from parent_id. Do not write it. May dangle.";
+
+-- ---------------------------------------------------------------------------
+-- Text. Post-only and comment-only fields are cleared for the other kind.
+-- ---------------------------------------------------------------------------
+
+DEFINE FIELD OVERWRITE title ON documents TYPE option<string>
+    VALUE IF kind = 'post' THEN $value OR '' ELSE NONE END
+    COMMENT "Submission title. Empty string when the archive omits it.";
+
+DEFINE FIELD OVERWRITE selftext ON documents TYPE option<string>
+    VALUE IF kind = 'post' THEN $value ELSE NONE END;
+
+DEFINE FIELD OVERWRITE selftext_cleaned ON documents TYPE option<string>
+    VALUE IF kind = 'post' THEN $value ELSE NONE END
+    COMMENT "Preprocessed selftext. Written by the ingest script.";
+
+DEFINE FIELD OVERWRITE body ON documents TYPE option<string>
+    VALUE IF kind = 'comment' THEN $value ELSE NONE END;
+
+DEFINE FIELD OVERWRITE domain ON documents TYPE option<string>
+    VALUE IF kind = 'post' THEN $value ELSE NONE END;
+
+DEFINE FIELD OVERWRITE url ON documents TYPE option<string>
+    VALUE IF kind = 'post' THEN $value ELSE NONE END;
+
+DEFINE FIELD OVERWRITE analysis_text ON documents TYPE option<string>
+    COMMENT "Encoder input. Post: title + selftext. Comment: body. Written by the ingest script.";
+
+DEFINE FIELD OVERWRITE permalink ON documents TYPE option<string>
+    COMMENT "Archive permalink. Private identifier for checking a quotation. Not an analytic variable.";
+
+DEFINE FIELD OVERWRITE stickied ON documents TYPE option<bool>
+    VALUE IF kind = 'comment' OR $value IS NONE THEN NONE ELSE <bool>$value END
+    COMMENT "Posts only. Moderator pin. Not part of the score rank. A comment's stickied flag is dropped.";
+
+-- Archive `edited` is false, or a Unix timestamp once the text changes. Pass that raw value here.
+DEFINE FIELD OVERWRITE edited_utc ON documents TYPE option<int>
+    VALUE IF $value IS NONE OR $value IS false OR $value IS true THEN
+        NONE
+    ELSE
+        <int>$value
+    END
+    COMMENT "Unix seconds the text was edited. false and true become NONE, because neither carries a timestamp. The score may belong to an earlier wording.";
+
+-- ---------------------------------------------------------------------------
+-- Time and score. Shared. upvote_ratio and num_comments are post-only.
+-- ---------------------------------------------------------------------------
+
+DEFINE FIELD OVERWRITE created_utc ON documents TYPE int
+    VALUE <int>$value
+    COMMENT "Unix seconds.";
+
+DEFINE FIELD OVERWRITE created ON documents TYPE option<int>
+    VALUE IF $value IS NONE THEN NONE ELSE <int>$value END
+    COMMENT "Unix seconds from the archive created field. Absent on early rows.";
+
+DEFINE FIELD OVERWRITE created_datetime ON documents TYPE option<datetime>
+    VALUE IF $value IS NONE THEN NONE ELSE <datetime>$value END;
+
+DEFINE FIELD OVERWRITE created_utc_datetime ON documents TYPE option<datetime>
+    VALUE IF $value IS NONE THEN NONE ELSE <datetime>$value END;
+
+DEFINE FIELD OVERWRITE created_at ON documents
+    COMPUTED time::from_unix(created_utc);
+
+DEFINE FIELD OVERWRITE score ON documents TYPE option<int>
+    VALUE IF $value IS NONE THEN NONE ELSE <int>$value END
+    COMMENT "Post scores floor at 0 in the archive. Comment scores can be negative.";
+
+DEFINE FIELD OVERWRITE ups ON documents TYPE option<int>
+    VALUE IF $value IS NONE THEN NONE ELSE <int>$value END;
+
+DEFINE FIELD OVERWRITE downs ON documents TYPE option<int>
+    VALUE IF $value IS NONE THEN NONE ELSE <int>$value END;
+
+DEFINE FIELD OVERWRITE upvote_ratio ON documents TYPE option<float>
+    VALUE IF kind = 'comment' OR $value IS NONE THEN NONE ELSE <float>$value END
+    COMMENT "Posts only. Archive mixes int and float. Coerced on write. A comment's copy of this key is dropped.";
+
+DEFINE FIELD OVERWRITE num_comments ON documents TYPE option<int>
+    VALUE IF kind = 'comment' OR $value IS NONE THEN NONE ELSE <int>$value END
+    COMMENT "Posts only. On a modern comment this key repeats the parent count and is dropped.";
+
+-- ---------------------------------------------------------------------------
+-- Indexes
+-- ---------------------------------------------------------------------------
+
+DEFINE INDEX OVERWRITE uniq_documents_name ON documents FIELDS name UNIQUE;
+DEFINE INDEX OVERWRITE uniq_documents_reddit_id ON documents FIELDS reddit_id UNIQUE;
+DEFINE INDEX OVERWRITE idx_documents_kind ON documents FIELDS kind;
+DEFINE INDEX OVERWRITE idx_documents_thread ON documents FIELDS thread;
+DEFINE INDEX OVERWRITE idx_documents_parent ON documents FIELDS parent;
+DEFINE INDEX OVERWRITE idx_documents_link ON documents FIELDS link_id;
+DEFINE INDEX OVERWRITE idx_documents_parent_id ON documents FIELDS parent_id;
+DEFINE INDEX OVERWRITE idx_documents_created ON documents FIELDS created_utc;
+DEFINE INDEX OVERWRITE idx_documents_kind_created ON documents FIELDS kind, created_utc;
+DEFINE INDEX OVERWRITE idx_documents_score ON documents FIELDS score;
+DEFINE INDEX OVERWRITE idx_documents_upvote_ratio ON documents FIELDS upvote_ratio;
+DEFINE INDEX OVERWRITE idx_documents_num_comments ON documents FIELDS num_comments;
+DEFINE INDEX OVERWRITE idx_documents_stickied ON documents FIELDS stickied;
+
+
+""" 
+
 # SurrealDB schema for the posts table
 const TABLE_POSTS_SCHEMA = raw"""
 USE NS radmta DB natalism;
@@ -179,7 +346,8 @@ function apply_radmta_schema()
         SurrealdbWS.signin(db, user=SURREALDB_USER, pass=SURREALDB_PASS)
         
         # iterate through the schemas and apply them to the database, eache schema constant is a large raw string of SurrealSQL statements
-        for sql in (NAMESPACE_SCHEMA, TABLE_POSTS_SCHEMA, TABLE_COMMENTS_SCHEMA)
+        #for sql in (NAMESPACE_SCHEMA, TABLE_POSTS_SCHEMA, TABLE_COMMENTS_SCHEMA)
+        for sql in (NAMESPACE_SCHEMA, DOCUMENTS_TABLE_SCHEMA)
             # apply the schema to the database
             result = SurrealdbWS.query(db, sql=sql)
             errors = surreal_statement_errors(result) # check for errors in the schema
@@ -218,7 +386,7 @@ end
 
 
 # A helper function to preprocess text for the radmta project
-function radmta_preprocess_text(_text::String)
+function radmta_preprocess_text(_text::String)::String
         
     fused_url_pattern = r"\bhttps?www[a-zA-Z0-9]+"s
     # Strip HTML tags and collapse whitespace. Leave letters, digits, and punctuation.
@@ -236,7 +404,7 @@ end
 
 
 # A helper function to read a jsonl file and return an array of dicts
-function read_jsonl_and_return_array_of_dicts(file_path::String)
+function read_jsonl_and_return_array_of_dicts(file_path::String)::Array
     # create an empty array to store the jsonl data
     _jsonl_data = []
 
@@ -308,7 +476,6 @@ function insert_radmta_posts_data(posts_data)
 end
 
 
-
 function insert_radmta_comments_data(comments_data)
 
     # connect to the surrealdb database
@@ -356,6 +523,96 @@ function insert_radmta_comments_data(comments_data)
     end
 end
 
+function archive_edited_to_utc(edited)
+    edited === nothing && return nothing
+    edited === false && return nothing
+    edited === true && return nothing   # rare; same as “no timestamp”
+    return edited                       # expect Integer
+end
+# One function handles both. The fullname prefix sets `kind`, and the record id is `documents:` plus that fullname. `edited` is passed through as `edited_utc`.
+
+function insert_radmta_documents_data(records::Array)
+
+    # connect to the surrealdb database
+    _db = SurrealdbWS.Surreal("ws://$(SURREALDB_HOST):$(SURREALDB_PORT)/rpc")
+    SurrealdbWS.connect(_db) # connect to the database
+
+    try
+        # sign in to the database
+        SurrealdbWS.signin(_db, user=SURREALDB_USER, pass=SURREALDB_PASS)
+        # switch to the database and namespace
+        SurrealdbWS.use(_db, namespace=SURREALDB_NAMESPACE, database=SURREALDB_DATABASE)
+
+        for record in records
+            name = json_get(record, "name")
+            if name === nothing
+                continue
+            end
+
+            name_s = String(name)
+            if startswith(name_s, "t3_")
+                kind = "post"
+            elseif startswith(name_s, "t1_")
+                kind = "comment"
+            else
+                continue
+            end
+
+            # shared study fields. reddit_id, thread, and parent are filled by the schema.
+            _insert_data = Dict{String, Any}(
+                "kind" => kind,
+                "name" => name_s,
+                "created_utc" => json_get(record, "created_utc"), # unix time in utc
+                "created" => json_get(record, "created"),
+                "score" => json_get(record, "score"),
+                "ups" => json_get(record, "ups"),
+                "downs" => json_get(record, "downs"),
+                "permalink" => json_get(record, "permalink"),
+                "edited_utc" => archive_edited_to_utc(json_get(record, "edited")),
+            )
+
+            if kind == "post"
+                title = json_get(record, "title")
+                selftext = json_get(record, "selftext")
+                title_s = title === nothing ? "" : String(strip(title))
+                selftext_s = selftext === nothing ? "" : String(strip(selftext))
+
+                _insert_data["title"] = title
+                _insert_data["selftext"] = selftext
+                _insert_data["domain"] = json_get(record, "domain")
+                _insert_data["url"] = json_get(record, "url")
+                _insert_data["upvote_ratio"] = json_get(record, "upvote_ratio")
+                _insert_data["num_comments"] = json_get(record, "num_comments")
+                _insert_data["stickied"] = json_get(record, "stickied")
+                _insert_data["selftext_cleaned"] = radmta_preprocess_text(String(selftext_s))
+                _insert_data["analysis_text"] = radmta_preprocess_text(String(strip(title_s * " " * selftext_s)))
+            else
+                body = json_get(record, "body")
+                body_s = body === nothing ? "" : String(strip(body))
+
+                _insert_data["link_id"] = json_get(record, "link_id")
+                _insert_data["parent_id"] = json_get(record, "parent_id")
+                _insert_data["body"] = body
+                _insert_data["analysis_text"] = radmta_preprocess_text(String(body_s))
+            end
+
+            # drop keys that would become JSON null
+            for k in collect(keys(_insert_data))
+                _insert_data[k] === nothing && delete!(_insert_data, k)
+            end
+
+            # create the record in the database
+            SurrealdbWS.create(_db, thing="documents:$name_s", data=_insert_data)
+        end
+
+    finally
+        # close the database connection
+        SurrealdbWS.close(_db)
+    end
+end
+
+
+
 ###############################################################################################
 ###################################### MAIN ###################################################
 ###############################################################################################
@@ -367,24 +624,24 @@ function main()
 
     # Assemble file path fo the posts jsonl archive
     posts_jsonl_file = joinpath(homedir(), "Downloads", "r_natalism_posts-11-01-26.jsonl")
-
-    # Assemble file path for the comments jsonl archive
+#
+#    # Assemble file path for the comments jsonl archive
     comments_jsonl_file = joinpath(homedir(), "Downloads", "r_natalism_comments-11-01-26.jsonl")
-    
-    # read the posts data from the jsonl file
+#    
+#    # read the posts data from the jsonl file
     posts_jsonl_data = read_jsonl_and_return_array_of_dicts(posts_jsonl_file)
-
-    # read the comments data from the jsonl file
+#
+#    # read the comments data from the jsonl file
     comments_jsonl_data = read_jsonl_and_return_array_of_dicts(comments_jsonl_file)
-
-    # insert the posts data into the database
-    insert_radmta_posts_data(posts_jsonl_data)
-
-    # insert the comments data into the database
-    insert_radmta_comments_data(comments_jsonl_data)
-
-
-    # free up memory for processing by the garbage collector. 
+#
+#    # insert the posts data into the database
+    insert_radmta_documents_data(posts_jsonl_data)
+#
+#    # insert the comments data into the database
+    insert_radmta_documents_data(comments_jsonl_data)
+#
+#
+#    # free up memory for processing by the garbage collector. 
     posts_jsonl_data = nothing   # or let main end
     comments_jsonl_data = nothing   # or let main end
     GC.gc()
@@ -398,71 +655,4 @@ end
 # Run the main function
 main()
 
-
-
-
-## Modify the creation steap for surrealdb 
-
-
-#surql(v::AbstractString) = "s" * JSON.json(v)
-#surql(::Nothing) = "NONE"
-#surql(v::Bool) = v ? "true" : "false"
-#surql(v::Real) = string(v)
-#
-#surql_object(d) = "{" * join(("$k: $(surql(v))" for (k, v) in d), ", ") * "}"
-#
-#sql = "CREATE posts:⟨$(_insert_data["name"])⟩ CONTENT $(surql_object(_insert_data));"
-#errors = surreal_statement_errors(SurrealdbWS.query(_db, sql=sql))
-#isempty(errors) || error(join(errors, "\n"))
-
-
-
-## comments: name as the record id, link_id, parent_id, body, created_utc, score
-# Iterate through the comments data and create a dictionary for each comment
-#for comment in comments_jsonl_data
-#    created = json_get(comment, "created")
-#    created_utc = json_get(comment, "created_utc")
-#    data = Dict{String, Any}(
-#        "name" => json_get(comment, "name"),
-#        "link_id" => json_get(comment, "link_id"),
-#        "parent_id" => json_get(comment, "parent_id"),
-#        "body" => json_get(comment, "body"),
-#        "created_utc" => created_utc,
-#        "created" => created,
-#        "score" => json_get(comment, "score"),
-#        "analysis_text" => radmta_preprocess_text(String(strip(something(json_get(comment, "body"), "")))),
-#    )
-#    println(data)
-#end
-
-
-# comments
-
-
-#const FIELDS_FOR_POSTS = Dict{String, Any}(
-#    "name" => "null",
-#    "title" => "null",
-#    "selftext" => "null",
-#    "domain" => "null",
-#    "created_utc" => "null",
-#    "created" => "null",
-#    "score" => "null",
-#    "upvote_ratio" => "null",
-#    "num_comments" => "null",
-#    "ups" => "null",
-#    "downs" => "null",
-#    "url" => "null",
-#    "selftext_cleaned" => "null",
-#    "analysis_text" => "null"
-#)
-#
-#const FIELDS_FOR_COMMENTS = [
-#    "name",
-#    "link_id",
-#    "parent_id",
-#    "body",
-#    "created_utc",
-#    "created",
-#    "score",
-#    "analysis_text"
-#]
+# End of the script
