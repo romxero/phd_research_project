@@ -39,7 +39,6 @@ USE NS radmta DB natalism;
 """
 
 
-
 const DOCUMENTS_TABLE_SCHEMA = raw"""
 
 DEFINE NAMESPACE IF NOT EXISTS radmta;
@@ -202,118 +201,7 @@ DEFINE INDEX OVERWRITE idx_documents_upvote_ratio ON documents FIELDS upvote_rat
 DEFINE INDEX OVERWRITE idx_documents_num_comments ON documents FIELDS num_comments;
 DEFINE INDEX OVERWRITE idx_documents_stickied ON documents FIELDS stickied;
 
-
 """ 
-
-# SurrealDB schema for the posts table
-const TABLE_POSTS_SCHEMA = raw"""
-USE NS radmta DB natalism;
-DEFINE TABLE OVERWRITE posts SCHEMAFULL
-    COMMENT "Study fields for one submission. Record id is the t3_ fullname.";
-
-DEFINE FIELD OVERWRITE name ON posts TYPE string
-    ASSERT $value.starts_with('t3_')
-    COMMENT "Reddit fullname, e.g. t3_14622a";
--- string::slice(s, start) reads through the end. A third argument is an end index.
-DEFINE FIELD OVERWRITE reddit_id ON posts TYPE string
-    VALUE $value OR string::slice(name, 3)
-    ASSERT $value = string::slice(name, 3)
-    COMMENT "Short id. Derived from name.";
-DEFINE FIELD OVERWRITE title ON posts TYPE string
-    VALUE $value OR '';
-DEFINE FIELD OVERWRITE selftext ON posts TYPE option<string>;
-DEFINE FIELD OVERWRITE domain ON posts TYPE option<string>;
-DEFINE FIELD OVERWRITE url ON posts TYPE option<string>;
-DEFINE FIELD OVERWRITE created_utc ON posts TYPE int
-    VALUE <int>$value
-    COMMENT "Unix seconds";
-DEFINE FIELD OVERWRITE created ON posts TYPE option<int>
-    VALUE IF $value IS NONE THEN NONE ELSE <int>$value END
-    COMMENT "Unix seconds from the archive created field.";
-DEFINE FIELD OVERWRITE created_at ON posts
-    COMPUTED time::from_unix(created_utc)
-    COMMENT "Unix seconds computed to datetime.";
-DEFINE FIELD OVERWRITE score ON posts TYPE option<int>
-    VALUE IF $value IS NONE THEN NONE ELSE <int>$value END;
-DEFINE FIELD OVERWRITE upvote_ratio ON posts TYPE option<float>
-    VALUE IF $value IS NONE THEN NONE ELSE <float>$value END
-    COMMENT "Archive mixes int and float. Coerced on write.";
-DEFINE FIELD OVERWRITE num_comments ON posts TYPE option<int>
-    VALUE IF $value IS NONE THEN NONE ELSE <int>$value END;
-DEFINE FIELD OVERWRITE ups ON posts TYPE option<int>
-    VALUE IF $value IS NONE THEN NONE ELSE <int>$value END;
-DEFINE FIELD OVERWRITE downs ON posts TYPE option<int>
-    VALUE IF $value IS NONE THEN NONE ELSE <int>$value END;
-DEFINE FIELD OVERWRITE selftext_cleaned ON posts TYPE option<string>
-    COMMENT "Preprocessed selftext. Written by the ingest script.";
-DEFINE FIELD OVERWRITE analysis_text ON posts TYPE option<string>
-    VALUE IF $value IS NONE THEN NONE ELSE <string>$value END
-    COMMENT "Preprocessed title + selftext. Written by the ingest script.";
-
-
-DEFINE INDEX OVERWRITE uniq_posts_name ON posts FIELDS name UNIQUE;
-DEFINE INDEX OVERWRITE uniq_posts_reddit_id ON posts FIELDS reddit_id UNIQUE;
-DEFINE INDEX OVERWRITE idx_posts_created ON posts FIELDS created_utc;
-DEFINE INDEX OVERWRITE idx_posts_score ON posts FIELDS score;
-DEFINE INDEX OVERWRITE idx_posts_upvote_ratio ON posts FIELDS upvote_ratio;
-DEFINE INDEX OVERWRITE idx_posts_num_comments ON posts FIELDS num_comments;
-"""
-
-# SurrealDB schema for the comments table
-const TABLE_COMMENTS_SCHEMA = raw"""
-USE NS radmta DB natalism;
-DEFINE TABLE OVERWRITE comments SCHEMAFULL
-    COMMENT "Study fields for one comment. Record id is the t1_ fullname.";
-
-DEFINE FIELD OVERWRITE name ON comments TYPE string
-    ASSERT $value.starts_with('t1_')
-    COMMENT "Reddit fullname, e.g. t1_c7a6yvf";
-DEFINE FIELD OVERWRITE reddit_id ON comments TYPE string
-    VALUE $value OR string::slice(name, 3)
-    ASSERT $value = string::slice(name, 3)
-    COMMENT "Short id. Derived from name.";
-DEFINE FIELD OVERWRITE link_id ON comments TYPE string
-    ASSERT $value.starts_with('t3_')
-    COMMENT "Submission fullname this comment belongs to";
-DEFINE FIELD OVERWRITE parent_id ON comments TYPE string
-    ASSERT $value.starts_with('t1_') OR $value.starts_with('t3_')
-    COMMENT "t3_* = reply to the submission; t1_* = reply to a comment";
-DEFINE FIELD OVERWRITE post ON comments TYPE option<record<posts>>
-    VALUE $value OR type::record("posts", link_id)
-    COMMENT "posts:⟨link_id⟩. May dangle if that submission was not copied.";
-DEFINE FIELD OVERWRITE parent ON comments
-    COMPUTED IF parent_id.starts_with('t1_') THEN
-        type::record("comments", parent_id)
-    ELSE IF parent_id.starts_with('t3_') THEN
-        type::record("posts", parent_id)
-    ELSE
-        NONE
-    END
-    COMMENT "comments:⟨t1_…⟩ or posts:⟨t3_…⟩. Derived from parent_id. Do not write it.";
-DEFINE FIELD OVERWRITE body ON comments TYPE option<string>;
-DEFINE FIELD OVERWRITE created_utc ON comments TYPE int
-    VALUE <int>$value
-    COMMENT "Unix seconds";
-DEFINE FIELD OVERWRITE created ON comments TYPE option<int>
-    VALUE IF $value IS NONE THEN NONE ELSE <int>$value END
-    COMMENT "Unix seconds from the archive created field.";
-DEFINE FIELD OVERWRITE created_at ON comments
-    COMPUTED time::from_unix(created_utc)
-    COMMENT "Unix seconds computed to datetime.";
-DEFINE FIELD OVERWRITE score ON comments TYPE option<int>
-    VALUE IF $value IS NONE THEN NONE ELSE <int>$value END;
-DEFINE FIELD OVERWRITE analysis_text ON comments TYPE option<string>
-    VALUE IF $value IS NONE THEN NONE ELSE <string>$value END
-    COMMENT "Preprocessed body. Written by the ingest script. Derived from the body field.";
-
-DEFINE INDEX OVERWRITE uniq_comments_name ON comments FIELDS name UNIQUE;
-DEFINE INDEX OVERWRITE uniq_comments_reddit_id ON comments FIELDS reddit_id UNIQUE;
-DEFINE INDEX OVERWRITE idx_comments_link ON comments FIELDS link_id;
-DEFINE INDEX OVERWRITE idx_comments_parent ON comments FIELDS parent_id;
-DEFINE INDEX OVERWRITE idx_comments_post ON comments FIELDS post;
-DEFINE INDEX OVERWRITE idx_comments_created ON comments FIELDS created_utc;
-DEFINE INDEX OVERWRITE idx_comments_score ON comments FIELDS score;
-"""
 
 
 function put_some!(d, k, v)
@@ -321,6 +209,14 @@ function put_some!(d, k, v)
     return d
 end
 
+
+function sql_fallback_eligible(e)::Bool
+    msg = sprint(showerror, e)   # or e.msg if ErrorException
+    occursin("Couldn't coerce value for field", msg) || return false
+    occursin("Expected", msg) && occursin("string", msg) || return false
+  # optional: occursin(r"but found `?\w+:\w+", msg)
+    return true
+end
 
 
 # A helper function to check for errors in the surrealdb query results and return them as an array of strings
@@ -531,10 +427,10 @@ function archive_edited_to_utc(edited)
 end
 # One function handles both. The fullname prefix sets `kind`, and the record id is `documents:` plus that fullname. `edited` is passed through as `edited_utc`.
 
-function insert_radmta_documents_data(records::Array)
+function insert_radmta_documents_data(records::Array)::Nothing
 
     # connect to the surrealdb database
-    _db = SurrealdbWS.Surreal("ws://$(SURREALDB_HOST):$(SURREALDB_PORT)/rpc")
+    _db = SurrealdbWS.Surreal("ws://$(SURREALDB_HOST):$(SURREALDB_PORT)/rpc", npool=8)
     SurrealdbWS.connect(_db) # connect to the database
 
     try
@@ -600,9 +496,24 @@ function insert_radmta_documents_data(records::Array)
             for k in collect(keys(_insert_data))
                 _insert_data[k] === nothing && delete!(_insert_data, k)
             end
-
-            # create the record in the database
-            SurrealdbWS.create(_db, thing="documents:$name_s", data=_insert_data)
+            try
+                # create the record in the database
+                SurrealdbWS.create(_db, thing="documents:$name_s", data=_insert_data)
+            catch e
+                if sql_fallback_eligible(e)
+                    info("SQL fallback eligible for $name_s")
+                    info("Error: $e, trying to create record without SQL fallback.")
+                    result = SurrealdbWS.query(
+                        _db,
+                        sql = raw"CREATE type::record('documents', $rid) CONTENT $data;",
+                        vars = Dict("rid" => name_s, "data" => _insert_data),
+                    )
+                    errors = surreal_statement_errors(result)
+                    isempty(errors) || error(join(errors, "\n"))
+                else
+                    rethrow(e)
+                end
+            end
         end
 
     finally

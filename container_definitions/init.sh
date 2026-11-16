@@ -30,6 +30,14 @@ export APPTAINER_CACHEDIR=${MY_TMP_CACHE_DIR}/cache
 
 set +x
 
+#apptainer pull docker://ghcr.io/huggingface/text-embeddings-inference:xpu-ipex-latest
+#apptainer pull docker://ghcr.io/huggingface/text-embeddings-inference:xpu-ipex-latest
+#apptainer pull docker://ghcr.io/huggingface/text-embeddings-inference:xpu-ipex-latest
+#apptainer pull docker://ghcr.io/huggingface/text-embeddings-inference:turing-latest
+#apptainer pull ghcr.io/huggingface/text-embeddings-inference:rocm-latest
+#apptainer pull docker://ghcr.io/huggingface/text-embeddings-inference:rocm-latest
+#apptainer pull docker://ghcr.io/huggingface/text-embeddings-inference:120-1.9 
+#apptainer pull docker://ghcr.io/huggingface/text-embeddings-inference:120-1.9 
 
 
 exit 0
