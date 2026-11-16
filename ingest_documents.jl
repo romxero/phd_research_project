@@ -32,6 +32,14 @@ const SURREALDB_NAMESPACE = "radmta"
 const SURREALDB_DATABASE = "natalism"
 
 
+# SurrealDB connection pool size and timeout constants
+const SURREALDB_CONNECTION_POOL_SIZE = 8
+
+
+# SurrealDB connection timeout constants
+const SURREALDB_CONNECTION_TIMEOUT = 30
+
+
 # SurrealDB schema for the namespace
 ## raw"..." keeps SurrealQL $value from being interpolated by Julia (i.e. $value 
 ## could be instruct julia to inject a value in this variable, but surrealdb also uses this syntax for using variables in its operations).
