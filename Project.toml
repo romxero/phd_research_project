@@ -1,6 +1,9 @@
 [deps]
+Clustering = "aaaa29a8-35af-508c-8bc3-b662a17a0fe5"
+Distances = "b4f34e82-e78d-54a5-968a-f98e89d6e8f7"
 Distributed = "8ba89e20-285c-5b6f-9357-94700520ee1b"
 GLMakie = "e9467ef8-e4e7-5192-8a1a-b1aee30e663a"
+HDBSCAN = "4773fd7c-6dc0-4989-8854-e9e612562b10"
 HTTP = "cd3eb016-35fb-5094-929b-558a96fad6f3"
 HorseML = "cd092912-fa1d-4500-ad73-daf1b0b0bfff"
 IJulia = "7073ff75-c697-5162-941a-fcdaad2a7d2a"
@@ -12,6 +15,7 @@ RAGTools = "16ddad29-bbe8-45a7-857d-3d9514eb0023"
 SurrealdbWS = "7b3dffa2-a94d-4703-aaf5-57911c725dc8"
 TextAnalysis = "a2db99b7-8b79-58f8-94bf-bbc811eef33d"
 TextSearch = "7f6f6c8a-3b03-11e9-223d-e7d88259bd6c"
+UMAP = "c4f8c510-2410-5be4-91d7-4fbaeb39457e"
 WGLMakie = "276b4fcb-3e11-5398-bf8b-a0c2d153d008"
 
 [sources]
